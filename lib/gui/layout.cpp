@@ -284,6 +284,35 @@ void render_node(const Node& n, float x, float& y, double mx, double my, bool cl
         
         scanRows(n);
         
+        // 1.5 Distribute Free Space (Flex-Grow / Auto-Fill)
+        // User request: columns should fill available space ("flex-1")
+        if (!colWidths.empty()) {
+            float totalContentW = 0;
+            for (auto const& [idx, w] : colWidths) totalContentW += w;
+            
+            // Available width for content (childW is the Table's calculated width)
+            // Subtract border/padding if applicable to childW logic?
+            // childW usually includes padding if "box-sizing" concept existed, here childW is 'w' passed in.
+            // If table has explicit width, childW respects it.
+            
+            float freeSpace = childW - totalContentW;
+            // Also subtract Table Border?
+            float tableBorderW = 0;
+            if (n.attrs.count("border")) tableBorderW = parse_dim(n.attrs.at("border"), 0, 1);
+            else tableBorderW = 1;
+            if (n.attrs.count("border") && n.attrs.at("border") == "0") tableBorderW = 0;
+            
+            // Note: childW might include the border space depending on box model.
+            // Standard assumption: freeSpace > 0 means we can expand.
+            
+            if (freeSpace > 0) {
+                float extraPerCol = freeSpace / colWidths.size();
+                for (auto& [idx, w] : colWidths) {
+                    w += extraPerCol;
+                }
+            }
+        }
+
         // 2. Render Children 
         std::map<int, float>* prevColWidths = g_activeTableWidths;
         g_activeTableWidths = &colWidths;
