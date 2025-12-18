@@ -1,6 +1,7 @@
 #include "interpreter.h"
 #include <iostream>
 #include "../debugger.h"
+#include "../../lib/http/http_lib.h"
 
 Interpreter::Interpreter() {
     globals = std::make_shared<Environment>();
@@ -78,7 +79,8 @@ void Interpreter::execute(std::shared_ptr<Stmt> stmt) {
         if (imp->moduleName == "gui" || imp->moduleName == "math" || imp->moduleName == "string" || 
             imp->moduleName == "array" || imp->moduleName == "map" || imp->moduleName == "db" || 
             imp->moduleName == "webserver" || imp->moduleName == "fs" || imp->moduleName == "os" || 
-            imp->moduleName == "exec" || imp->moduleName == "regex" || imp->moduleName == "json") {
+            imp->moduleName == "exec" || imp->moduleName == "regex" || imp->moduleName == "json" || 
+            imp->moduleName == "http") {
             // Built-in module: import requested symbols
             if (!imp->symbols.empty()) {
                 // Import specific symbols: import { render_gui } from "gui"
@@ -96,47 +98,65 @@ void Interpreter::execute(std::shared_ptr<Stmt> stmt) {
         // File loading
         std::string filename = imp->moduleName;
         // User requested .sd extension, support .s (legacy) and .sd
-        if (filename.find('.') == std::string::npos) filename += ".sd";
-        
-        // Resolve relative paths using g_basePath
-        extern std::string g_basePath;
-        if (!filename.empty() && filename[0] == '.') {
-            // Remove ./ prefix
-            if (filename.length() >= 2 && filename[1] == '/') {
-                filename = filename.substr(2);  // Remove "./"
-            }
-            filename = g_basePath + filename;
+        if (filename.find('.') == std::string::npos && filename.find("://") == std::string::npos) {
+            filename += ".sd";
         }
         
-        std::ifstream file(filename);
-        if (file.is_open()) {
-            std::stringstream buffer;
-            buffer << file.rdbuf();
-            std::string source = buffer.str();
-            
-            // Store source for debugging this file
-            this->sourceCode = source;
-            
-            // Extract directory from filename for nested imports
-            std::string oldBasePath = g_basePath;
-            size_t lastSlash = filename.find_last_of('/');
-            if (lastSlash != std::string::npos) {
-                g_basePath = filename.substr(0, lastSlash + 1);
+        std::string source;
+        bool loaded = false;
+
+        // Remote Import detection
+        if (filename.find("http://") == 0 || filename.find("https://") == 0) {
+            // std::cout << "[Remote Import] Fetching: " << filename << std::endl;
+            source = HTTPLib::fetch(filename);
+            if (!source.empty()) {
+                loaded = true;
+            } else {
+                Debugger::runtimeError("Failed to fetch remote module: " + filename, 0);
+                return;
             }
+        } else {
+            // Resolve relative paths using g_basePath
+            extern std::string g_basePath;
+            std::string fullPath = filename;
+            if (!filename.empty() && filename[0] == '.') {
+                // Remove ./ prefix
+                if (filename.length() >= 2 && filename[1] == '/') {
+                    fullPath = filename.substr(2);  // Remove "./"
+                }
+                fullPath = g_basePath + fullPath;
+            }
+            
+            std::ifstream file(fullPath);
+            if (file.is_open()) {
+                std::stringstream buffer;
+                buffer << file.rdbuf();
+                source = buffer.str();
+                loaded = true;
+
+                // Extract directory from filename for nested imports
+                // Only for local files
+                extern std::string g_basePath;
+                size_t lastSlash = fullPath.find_last_of('/');
+                if (lastSlash != std::string::npos) {
+                    g_basePath = fullPath.substr(0, lastSlash + 1);
+                }
+            }
+        }
+
+        if (loaded) {
+            // Store source for debugging
+            this->sourceCode = source;
             
             Lexer lexer(source);
             auto tokens = lexer.tokenize();
             Parser parser(tokens);
             auto stmts = parser.parse();
             
+            // For remote imports, we should probably restore g_basePath if it was changed
+            // but we only change it for local files now.
             interpret(stmts);
-            
-            // Restore original basePath
-            g_basePath = oldBasePath;
         } else {
-             // Import file
-             // For now, assume it's just loading matching file in same dir or lib
-             // ... import logic
              Debugger::runtimeError("Could not find module '" + imp->moduleName + "'", 0);
         }
         return;

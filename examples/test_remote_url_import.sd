@@ -1,0 +1,3 @@
+import { sayHello } from "https://raw.githubusercontent.com/yudono/sunda/refs/heads/main/examples/test_utils/test_function.sd";
+
+sayHello("yudono");

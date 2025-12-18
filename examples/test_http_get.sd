@@ -1,0 +1,10 @@
+import { http_get } from "http";
+
+println("Testing HTTP GET to example.com...");
+const html = http_get("http://example.com");
+if (html.length > 0) {
+    println("Success! Received " + html.length + " bytes.");
+    // println(html.substring(0, 100));
+} else {
+    println("Failed to fetch.");
+}

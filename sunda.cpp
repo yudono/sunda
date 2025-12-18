@@ -12,6 +12,7 @@
 #include "lib/gui/minigui.h"
 #include "lib/gui/layout.h"
 #include "lib/register.h"
+#include <curl/curl.h>
 
 // Define global appState needed by minigui
 AppState appState;
@@ -80,44 +81,13 @@ void runREPL() {
         }
     }
 }
+// Global base path for relative resource loading (defined in layout.cpp)
+extern std::string g_basePath;
 
-int main(int argc, char* argv[]) {
-    if (argc < 2) {
-        runREPL();
-        return 0;
-    }
-    
-    std::string arg = argv[1];
-    if (arg == "--help" || arg == "-h") {
-        printHelp();
-        return 0;
-    }
-    
-    // Check flags
-    bool dumpTokens = false;
-    std::string filePath = arg;
-    
-    if (argc > 2) {
-        std::string flag = argv[1];
-        if (flag == "--dump-tokens") {
-            dumpTokens = true;
-            filePath = argv[2];
-        } else {
-             filePath = argv[1];
-             if (std::string(argv[2]) == "--dump-tokens") dumpTokens = true;
-        }
-    }
-    
-    // Set global base path for relative resource loading
-    std::string scriptPath = filePath;
-    size_t lastSlash = scriptPath.find_last_of("/\\");
-    if (lastSlash != std::string::npos) {
-        g_basePath = scriptPath.substr(0, lastSlash + 1);  // Include the slash
-    }
-
+int runFile(std::string filePath, bool dumpTokens) {
     std::ifstream file(filePath);
     if (!file.is_open()) {
-        std::cerr << "Could not open file: " << argv[1] << std::endl;
+        std::cerr << "Could not open file: " << filePath << std::endl;
         return 1;
     }
 
@@ -125,31 +95,69 @@ int main(int argc, char* argv[]) {
     buffer << file.rdbuf();
     std::string source = buffer.str();
 
-    // 1. Lex
-    Lexer lexer(source);
-    std::vector<Token> tokens = lexer.tokenize();
-    
-    if (dumpTokens) {
-        std::cout << "TOKENS:" << std::endl;
-        for (const auto& t : tokens) {
-            std::cout << "Line " << t.line << ": " << t.type << " '" << t.text << "'" << std::endl;
-        }
-        return 0; // Exit after dump
+    // Set global base path
+    size_t lastSlash = filePath.find_last_of("/\\");
+    if (lastSlash != std::string::npos) {
+        g_basePath = filePath.substr(0, lastSlash + 1);
     }
 
-    // 2. Parse
-    Parser parser(tokens);
-    std::vector<std::shared_ptr<Stmt>> statements = parser.parse();
+    try {
+        // 1. Lex
+        Lexer lexer(source);
+        std::vector<Token> tokens = lexer.tokenize();
+        
+        if (dumpTokens) {
+            std::cout << "TOKENS:" << std::endl;
+            for (const auto& t : tokens) {
+                std::cout << "Line " << t.line << ": " << t.type << " '" << t.text << "'" << std::endl;
+            }
+            return 0;
+        }
 
-    // 3. Interpret
-    Interpreter interpreter;
-    interpreter.sourceCode = source; // Pass source for debugging
-    interpreter.currentFile = filePath; // Pass file path for debugging
-    
-    // Register Libs
-    register_std_libs(interpreter);
+        // 2. Parse
+        Parser parser(tokens);
+        std::vector<std::shared_ptr<Stmt>> statements = parser.parse();
 
-    interpreter.interpret(statements);
+        // 3. Interpret
+        Interpreter interpreter;
+        interpreter.sourceCode = source;
+        interpreter.currentFile = filePath;
+        
+        register_std_libs(interpreter);
+        interpreter.interpret(statements);
+    } catch (...) {
+        // Errors handled by Debugger
+        return 1;
+    }
 
     return 0;
+}
+
+int main(int argc, char* argv[]) {
+    curl_global_init(CURL_GLOBAL_ALL);
+
+    int result = 0;
+    if (argc < 2) {
+        runREPL();
+    } else {
+        bool dumpTokens = false;
+        std::string filePath;
+        
+        if (std::string(argv[1]) == "--dump-tokens") {
+            dumpTokens = true;
+            if (argc > 2) filePath = argv[2];
+        } else {
+            filePath = argv[1];
+            if (argc > 2 && std::string(argv[2]) == "--dump-tokens") dumpTokens = true;
+        }
+
+        if (filePath.empty()) {
+            printHelp();
+        } else {
+            result = runFile(filePath, dumpTokens);
+        }
+    }
+
+    curl_global_cleanup();
+    return result;
 }
