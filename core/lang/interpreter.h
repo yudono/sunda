@@ -85,6 +85,7 @@ public:
     int hookIndex = 0;
      
     std::string sourceCode; // For debug
+    std::string currentFile = "main.sd"; // Default
     int currentLine = 0;
     
     void resetHooks() { hookIndex = 0; }

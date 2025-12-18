@@ -15,8 +15,10 @@ export function ListView({ items, onAdd, onEdit, onDelete }) {
                     padding="10px"
                     backgroundColor="#ffffff"
                     marginBottom="10px"
+                    border="1px"
+                    borderColor="#cccccc"
                 >
-                    <Text>{item.name}</Text>
+                    <Text color="#000000">{item.name}</Text>
 
                     <Row>
                         <Button onClick={() => onEdit(item)}>Edit</Button>

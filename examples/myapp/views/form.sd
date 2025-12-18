@@ -17,7 +17,7 @@ export function FormView({ item, onSave, onCancel }) {
                 placeholder="Item name"
             />
 
-            <View height="20px" />
+            <View height="80px" />
 
             <Row>
                 <Button

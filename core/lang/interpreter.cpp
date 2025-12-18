@@ -241,6 +241,7 @@ void Interpreter::executeBlock(std::shared_ptr<BlockStmt> block, std::shared_ptr
 }
 
 Value Interpreter::evaluate(std::shared_ptr<Expr> expr) {
+    if (expr->line > 0) currentLine = expr->line;
     if (auto lit = std::dynamic_pointer_cast<LiteralExpr>(expr)) {
         if (lit->isString) return {lit->value, 0, false};
         return {"", std::stoi(lit->value), true};
@@ -268,7 +269,7 @@ Value Interpreter::evaluate(std::shared_ptr<Expr> expr) {
         if (auto var = std::dynamic_pointer_cast<VarExpr>(call->callee)) {
             name = "'" + var->name + "'";
         }
-        Debugger::runtimeError("Attempt to call non-function: " + name + " is " + callee.toString(), currentLine, sourceCode);
+        Debugger::runtimeError("Attempt to call non-function: " + name + " is " + callee.toString(), currentLine, sourceCode, currentFile);
         return {"", 0, true}; // Unreachable
     }
     if (auto ternary = std::dynamic_pointer_cast<TernaryExpr>(expr)) {
@@ -317,6 +318,20 @@ Value Interpreter::evaluate(std::shared_ptr<Expr> expr) {
             }
         }
         
+        // Short-circuit logic
+        if (bin->op == "&&") {
+             Value l = evaluate(bin->left);
+             bool isLCond = (l.isInt && l.intVal != 0) || (!l.isInt && !l.strVal.empty());
+             if (!isLCond) return l; // Short-circuit false
+             return evaluate(bin->right);
+        }
+        if (bin->op == "||") {
+             Value l = evaluate(bin->left);
+             bool isLCond = (l.isInt && l.intVal != 0) || (!l.isInt && !l.strVal.empty());
+             if (isLCond) return l; // Short-circuit true
+             return evaluate(bin->right);
+        }
+
         Value l = evaluate(bin->left);
         Value r = evaluate(bin->right);
         
@@ -360,18 +375,7 @@ Value Interpreter::evaluate(std::shared_ptr<Expr> expr) {
              if (l.isInt && r.isInt && r.intVal != 0) return {"", l.intVal / r.intVal, true};
              return {"", 0, true};
         }
-        if (bin->op == "&&") {
-             // Short-circuit: if left is falsy, return left without evaluating right
-             bool leftTruthy = (l.isInt && l.intVal != 0) || (!l.isInt && !l.strVal.empty());
-             if (!leftTruthy) return l;
-             return r;  // Return right value
-        }
-        if (bin->op == "||") {
-             // Short-circuit: if left is truthy, return left without evaluating right
-             bool leftTruthy = (l.isInt && l.intVal != 0) || (!l.isInt && !l.strVal.empty());
-             if (leftTruthy) return l;
-             return r;  // Return right value
-        }
+
     }
     
     // Function Expression (Lambda)
@@ -417,10 +421,22 @@ Value Interpreter::evaluate(std::shared_ptr<Expr> expr) {
             xml += ">";
             for(auto c : jsx->children) {
                  Value cv = evaluate(c);
+                 std::cerr << "JSX CHILD: isList=" << cv.isList << " isInt=" << cv.isInt << " isClosure=" << cv.isClosure << " isNative=" << cv.isNative << " str=" << cv.strVal.substr(0, 50) << std::endl;
                  // Skip falsy values (for conditional rendering: {condition && <Component />})
-                 bool isFalsy = (cv.isInt && cv.intVal == 0) || (!cv.isInt && cv.strVal.empty());
+                 // IMPORTANT: Lists should NOT be treated as falsy even if strVal is empty!
+                 bool isFalsy = (cv.isInt && cv.intVal == 0) || (!cv.isInt && !cv.isList && cv.strVal.empty());
                  if (!isFalsy) {
-                     xml += cv.toString();
+                     // Check if it is a list (result of map)
+                     if (cv.isList && cv.listVal) {
+                         // Flatten list
+                         std::cerr << "FLATTEN: List size=" << cv.listVal->size() << std::endl;
+                         for (const auto& item : *cv.listVal) {
+                             xml += item.toString();
+                             std::cerr << "FLATTEN ITEM: " << item.toString().substr(0, 100) << "..." << std::endl;
+                         }
+                     } else {
+                         xml += cv.toString();
+                     }
                  }
             }
             xml += "</" + jsx->tagName + ">";

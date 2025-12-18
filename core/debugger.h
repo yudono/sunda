@@ -61,24 +61,33 @@ public:
         exit(1);
     }
     
-    static void runtimeError(const std::string& message, int line = 0, const std::string& source = "") {
+    static void runtimeError(const std::string& message, int line = 0, const std::string& source = "", const std::string& file = "") {
         std::cerr << COLOR_RED << "❌ RUNTIME ERROR" << COLOR_RESET << std::endl;
         std::cerr << "   " << message << std::endl;
+        
+        std::string location = "";
+        if (!file.empty()) location += file;
         if (line > 0) {
-            std::cerr << "   At line " << line << ":" << std::endl;
-            if (!source.empty()) {
-                 std::stringstream ss(source);
-                 std::string lineText;
-                 int current = 1;
-                 while (std::getline(ss, lineText)) {
-                     if (current == line) {
-                         std::cerr << "     " << lineText << std::endl;
-                         std::cerr << "     " << COLOR_RED << "^" << COLOR_RESET << std::endl;
-                         break;
-                     }
-                     current++;
+            if (!location.empty()) location += ":";
+            location += std::to_string(line);
+        }
+        
+        if (!location.empty()) {
+            std::cerr << "   At " << location << ":" << std::endl;
+        }
+
+        if (line > 0 && !source.empty()) {
+             std::stringstream ss(source);
+             std::string lineText;
+             int current = 1;
+             while (std::getline(ss, lineText)) {
+                 if (current == line) {
+                     std::cerr << "     " << lineText << std::endl;
+                     std::cerr << "     " << COLOR_RED << "^" << COLOR_RESET << std::endl;
+                     break;
                  }
-            }
+                 current++;
+             }
         }
         exit(1);
     }

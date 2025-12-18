@@ -1,0 +1,28 @@
+// Test List Operations
+var items = [
+    { id: 1, name: "Apple" },
+    { id: 2, name: "Banana" },
+    { id: 3, name: "Cherry" }
+]
+
+print("Original items:")
+print(items)
+println("")
+
+// Test map
+print("Testing map...")
+var names = items.map(item => item.name)
+print("Names: ")
+print(names)
+println("")
+
+// Test filter  
+print("Testing filter...")
+var filtered = items.filter(item => item.id > 1)
+print("Filtered (id > 1): ")
+print(filtered)
+println("")
+
+// Test length
+print("Length: ")
+println(items.length)

@@ -101,6 +101,7 @@ int main(int argc, char* argv[]) {
     // 3. Interpret
     Interpreter interpreter;
     interpreter.sourceCode = source; // Pass source for debugging
+    interpreter.currentFile = filePath; // Pass file path for debugging
     
     // Register Libs
     register_std_libs(interpreter);

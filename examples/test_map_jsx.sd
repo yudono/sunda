@@ -1,0 +1,20 @@
+import { render_gui } from "gui"
+
+function TestMap() {
+    var items = [
+        { id: 1, name: "Apple" },
+        { id: 2, name: "Banana" }
+    ]
+
+    return (
+        <Page>
+            {items.map(item => (
+                <Row backgroundColor="#ff0000" height="50px">
+                    <Text color="#ffffff">{item.name}</Text>
+                </Row>
+            ))}
+        </Page>
+    )
+}
+
+render_gui(TestMap)
