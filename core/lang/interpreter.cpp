@@ -70,7 +70,7 @@ void Interpreter::execute(std::shared_ptr<Stmt> stmt) {
         // std::cout << "[JIT] Loading module: " << imp->moduleName << std::endl;
         
         if (imp->moduleName == "gui" || imp->moduleName == "math" || imp->moduleName == "string" || 
-            imp->moduleName == "array" || imp->moduleName == "map") {
+            imp->moduleName == "array" || imp->moduleName == "map" || imp->moduleName == "db") {
             // Built-in module: import requested symbols
             if (!imp->symbols.empty()) {
                 // Import specific symbols: import { render_gui } from "gui"
@@ -168,16 +168,13 @@ void Interpreter::execute(std::shared_ptr<Stmt> stmt) {
     }
     else if (auto ifStmt = std::dynamic_pointer_cast<IfStmt>(stmt)) {
         Value cond = evaluate(ifStmt->condition);
-        bool isTrue = (cond.isInt && cond.intVal != 0) || (!cond.isInt && !cond.strVal.empty());
-        
-        if (isTrue) execute(ifStmt->thenBranch);
+        if (isTrue(cond)) execute(ifStmt->thenBranch);
         else if (ifStmt->elseBranch) execute(ifStmt->elseBranch);
     }
     else if (auto whileStmt = std::dynamic_pointer_cast<WhileStmt>(stmt)) {
         while (true) {
             Value cond = evaluate(whileStmt->condition);
-            bool isTrue = (cond.isInt && cond.intVal != 0) || (!cond.isInt && !cond.strVal.empty());
-            if (!isTrue) break;
+            if (!isTrue(cond)) break;
             execute(whileStmt->body);
             if (isReturning) break;  // Handle early return
         }
@@ -251,6 +248,12 @@ Value Interpreter::evaluate(std::shared_ptr<Expr> expr) {
     if (auto var = std::dynamic_pointer_cast<VarExpr>(expr)) {
         return getVar(var->name);
     }
+    if (auto unary = std::dynamic_pointer_cast<UnaryExpr>(expr)) {
+        Value right = evaluate(unary->right);
+        if (unary->op == "!") return {"", !isTrue(right) ? 1 : 0, true};
+        if (unary->op == "-" && right.isInt) return {"", -right.intVal, true};
+        return right;
+    }
     if (auto call = std::dynamic_pointer_cast<CallExpr>(expr)) {
         Value callee = evaluate(call->callee);
         
@@ -276,13 +279,7 @@ Value Interpreter::evaluate(std::shared_ptr<Expr> expr) {
     }
     if (auto ternary = std::dynamic_pointer_cast<TernaryExpr>(expr)) {
         Value cond = evaluate(ternary->condition);
-        // Objects and lists should be truthy even if strVal is empty
-        // "undefined" string should be falsy
-        bool isTrue = (cond.isInt && cond.intVal != 0) || 
-                      cond.isList || cond.isMap || 
-                      (!cond.isInt && !cond.isList && !cond.isMap && 
-                       !cond.strVal.empty() && cond.strVal != "undefined");
-        if (isTrue) {
+        if (isTrue(cond)) {
             return evaluate(ternary->trueExpr);
         } else {
             return evaluate(ternary->falseExpr);
@@ -328,14 +325,12 @@ Value Interpreter::evaluate(std::shared_ptr<Expr> expr) {
         // Short-circuit logic
         if (bin->op == "&&") {
              Value l = evaluate(bin->left);
-             bool isLCond = (l.isInt && l.intVal != 0) || (!l.isInt && !l.strVal.empty());
-             if (!isLCond) return l; // Short-circuit false
+             if (!isTrue(l)) return l; // Short-circuit false
              return evaluate(bin->right);
         }
         if (bin->op == "||") {
              Value l = evaluate(bin->left);
-             bool isLCond = (l.isInt && l.intVal != 0) || (!l.isInt && !l.strVal.empty());
-             if (isLCond) return l; // Short-circuit true
+             if (isTrue(l)) return l; // Short-circuit true
              return evaluate(bin->right);
         }
 
@@ -562,10 +557,7 @@ Value Interpreter::evaluate(std::shared_ptr<Expr> expr) {
         
         if (obj.isMap && obj.mapVal) {
             if (obj.mapVal->count(key)) return (*obj.mapVal)[key];
-            return Value("", 0, false); // Return empty string instead of undefined
         }
-        
-        return Value("", 0, false); // Consistent empty fallback
         if (obj.isList && obj.listVal) {
              // Array Properties
              if (key == "length") {
@@ -751,5 +743,13 @@ Value Interpreter::getGlobal(std::string name) {
 
 void Interpreter::callFunction(std::string name) {
     // Deprecated
+}
+
+bool Interpreter::isTrue(Value v) const {
+    if (v.isInt) return v.intVal != 0;
+    if (v.isList && v.listVal) return true;
+    if (v.isMap && v.mapVal) return true;
+    if (v.strVal == "undefined" || v.strVal == "null" || v.strVal == "false" || v.strVal == "0") return false;
+    return !v.strVal.empty();
 }
 

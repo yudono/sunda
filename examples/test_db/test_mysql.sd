@@ -1,0 +1,49 @@
+// MySQL Database Verification Script
+import { db_connect, db_execute, db_query, db_close, db_error } from "db";
+
+println("🚀 Starting MySQL Database Verification...");
+
+// URL format: mysql://user:password@host:port/dbname
+const url = "mysql://root:password@localhost:3306/sunda";
+
+println("🔗 Attempting to connect to: " + url);
+const connected = db_connect(url);
+
+if (!connected) {
+    println("❌ Failed to connect: " + db_error());
+    println("💡 Note: Make sure MySQL is running and the database 'sunda' exists.");
+} else {
+    println("✅ Connected to MySQL");
+
+    // Setup Table
+    db_execute("DROP TABLE IF EXISTS test_users");
+    db_execute("CREATE TABLE test_users (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255), email VARCHAR(255))");
+    println("✅ Table 'test_users' created");
+
+    // Insert Data
+    const users = [
+        { name: "Yudono", email: "yudono@example.com" },
+        { name: "MySQL User", email: "mysql@sunda.io" }
+    ];
+
+    var i = 0;
+    while (i < users.length) {
+        var u = users[i];
+        db_execute("INSERT INTO test_users (name, email) VALUES (?, ?)", [u.name, u.email]);
+        i = i + 1;
+    }
+    println("✅ Data inserted safely");
+
+    // Query Data
+    const results = db_query("SELECT * FROM test_users");
+    println("✅ Query Results:");
+    var j = 0;
+    while (j < results.length) {
+        var row = results[j];
+        println("  - [" + row.id + "] " + row.name + " <" + row.email + ">");
+        j = j + 1;
+    }
+
+    db_close();
+    println("🏁 MySQL Verification Complete.");
+}

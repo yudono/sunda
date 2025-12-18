@@ -14,20 +14,20 @@ endif
 
 # Compiler and Basic Flags
 CXX = clang++
-CXXFLAGS = -std=c++11 -Wall -O2 -Wno-deprecated-declarations -Wno-c++11-narrowing
+CXXFLAGS = -std=c++17 -Wall -O2 -Wno-deprecated-declarations -Wno-c++11-narrowing
 
 # OS-specific settings
 ifeq ($(OS_NAME),macos)
     HOMEBREW_PREFIX = /opt/homebrew
-    INCLUDES = -I$(HOMEBREW_PREFIX)/include -I$(HOMEBREW_PREFIX)/include/freetype2
-    LDFLAGS = -L$(HOMEBREW_PREFIX)/lib -framework OpenGL -framework Cocoa -framework IOKit -framework CoreVideo -lglfw -lfreetype
+    INCLUDES = -I$(HOMEBREW_PREFIX)/include -I$(HOMEBREW_PREFIX)/include/freetype2 -I$(HOMEBREW_PREFIX)/include/mysql
+    LDFLAGS = -L$(HOMEBREW_PREFIX)/lib -framework OpenGL -framework Cocoa -framework IOKit -framework CoreVideo -lglfw -lfreetype -lsqlite3 -lmysqlclient
 else ifeq ($(OS_NAME),linux)
-    INCLUDES = $(shell pkg-config --cflags glfw3 freetype2)
-    LDFLAGS = $(shell pkg-config --libs glfw3 freetype2) -lGL -lX11 -lpthread -ldl
+    INCLUDES = $(shell pkg-config --cflags glfw3 freetype2 sqlite3)
+    LDFLAGS = $(shell pkg-config --libs glfw3 freetype2 sqlite3) -lmysqlclient -lGL -lX11 -lpthread -ldl
 else ifeq ($(OS_NAME),windows)
     # Assuming MinGW/clang on Windows with libraries in standard paths
     INCLUDES = -I/usr/include/freetype2
-    LDFLAGS = -lglfw3 -lfreetype -lgdi32 -lopengl32 -lwinmm
+    LDFLAGS = -lglfw3 -lfreetype -lsqlite3 -lgdi32 -lopengl32 -lwinmm
 endif
 
 # Common Includes

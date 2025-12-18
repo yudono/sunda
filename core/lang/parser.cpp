@@ -136,7 +136,11 @@ std::shared_ptr<Stmt> Parser::statement() {
         std::shared_ptr<Expr> condition = expression();
         consume(TOK_RPAREN, "Expect ')' after condition.");
         std::shared_ptr<Stmt> thenBranch = statement();
-        return std::make_shared<IfStmt>(condition, thenBranch);
+        std::shared_ptr<Stmt> elseBranch = nullptr;
+        if (match(TOK_ELSE)) {
+            elseBranch = statement();
+        }
+        return std::make_shared<IfStmt>(condition, thenBranch, elseBranch);
     }
     if (match(TOK_WHILE)) {
         consume(TOK_LPAREN, "Expect '(' after while.");
@@ -286,19 +290,35 @@ std::shared_ptr<Expr> Parser::term() {
     while (match(TOK_PLUS) || match(TOK_MINUS)) {
         std::string op = previous().type == TOK_PLUS ? "+" : "-";
         std::shared_ptr<Expr> right = factor(); 
-        expr = std::make_shared<BinaryExpr>(expr, op, right);
+        auto bin = std::make_shared<BinaryExpr>(expr, op, right);
+        bin->line = previous().line;
+        expr = bin;
     }
     return expr;
 }
 
 std::shared_ptr<Expr> Parser::factor() {
-    std::shared_ptr<Expr> expr = call();
+    std::shared_ptr<Expr> expr = unary();
     while (match(TOK_STAR) || match(TOK_SLASH)) {
         std::string op = previous().type == TOK_STAR ? "*" : "/";
-        std::shared_ptr<Expr> right = call();
-        expr = std::make_shared<BinaryExpr>(expr, op, right);
+        std::shared_ptr<Expr> right = unary();
+        auto bin = std::make_shared<BinaryExpr>(expr, op, right);
+        bin->line = previous().line;
+        expr = bin;
     }
     return expr;
+}
+
+std::shared_ptr<Expr> Parser::unary() {
+    if (match(TOK_BANG) || match(TOK_MINUS)) {
+        Token opToken = previous();
+        std::string op = opToken.text;
+        std::shared_ptr<Expr> right = unary();
+        auto u = std::make_shared<UnaryExpr>(op, right);
+        u->line = opToken.line;
+        return u;
+    }
+    return call();
 }
 
 std::shared_ptr<Expr> Parser::primary() {

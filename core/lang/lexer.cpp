@@ -32,6 +32,7 @@ std::vector<Token> Lexer::tokenize() {
             else if (ident == "case") addToken(TOK_CASE, ident);
             else if (ident == "default") addToken(TOK_DEFAULT, ident);
             else if (ident == "const") addToken(TOK_CONST, ident);
+            else if (ident == "else") addToken(TOK_ELSE, ident);
             else addToken(TOK_IDENTIFIER, ident);
         } else if (isdigit(c)) {
             // ...
@@ -151,6 +152,7 @@ std::vector<Token> Lexer::tokenize() {
             }
             else if (c == '!') {
                  if (peek() == '=') { advance(); addToken(TOK_NE, "!="); }
+                 else addToken(TOK_BANG, "!");
             }
         }
     }

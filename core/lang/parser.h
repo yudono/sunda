@@ -59,6 +59,12 @@ struct SpreadExpr : Expr {
     SpreadExpr(std::shared_ptr<Expr> arg) : argument(arg) {}
 };
 
+struct UnaryExpr : Expr {
+    std::string op;
+    std::shared_ptr<Expr> right;
+    UnaryExpr(std::string o, std::shared_ptr<Expr> r) : op(o), right(r) {}
+};
+
 struct BinaryExpr : Expr {
     std::shared_ptr<Expr> left;
     std::string op;
@@ -179,6 +185,7 @@ private:
     std::shared_ptr<Expr> comparison();
     std::shared_ptr<Expr> term();
     std::shared_ptr<Expr> factor();
+    std::shared_ptr<Expr> unary();
     std::shared_ptr<Expr> call(); // Added
     std::shared_ptr<Expr> primary();
     

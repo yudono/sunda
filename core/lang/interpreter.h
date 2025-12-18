@@ -112,6 +112,7 @@ public:
 private:
     void execute(std::shared_ptr<Stmt> stmt);
     Value evaluate(std::shared_ptr<Expr> expr);
+    bool isTrue(Value v) const;
     
     void executeBlock(std::shared_ptr<BlockStmt> block, std::shared_ptr<Environment> env);
 

@@ -1,0 +1,55 @@
+// Database Library Verification Script
+import { db_connect, db_execute, db_query, db_close, db_error } from "db";
+
+println("🚀 Starting Database Verification...");
+
+// 1. Connect to SQLite
+const connected = db_connect("sqlite://examples/test_db/test.db");
+if (!connected) {
+    println("❌ Failed to connect: " + db_error());
+} else {
+    println("✅ Connected to SQLite");
+
+    // 2. Setup Table
+    db_execute("DROP TABLE IF EXISTS users");
+    db_execute("CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, email TEXT)");
+    println("✅ Table 'users' created");
+
+    // 3. Parameterized Insert (Prevention of SQL Injection)
+    const users = [
+        { name: "Yudono", email: "yudono@example.com" },
+        { name: "Sunda Agent", email: "agent@sunda.io" },
+        { name: "Malicious User'); DROP TABLE users; --", email: "hacker@evil.com" }
+    ];
+
+    var i = 0;
+    while (i < users.length) {
+        var u = users[i];
+        // Note: the malicious user name will be literalized in the param, not executed as SQL
+        db_execute("INSERT INTO users (name, email) VALUES (?, ?)", [u.name, u.email]);
+        i = i + 1;
+    }
+    println("✅ " + users.length + " users inserted safely");
+
+    // 4. Query Data
+    const results = db_query("SELECT * FROM users ORDER BY id ASC");
+    println("✅ Query Results (Total: " + results.length + "):");
+
+    var j = 0;
+    while (j < results.length) {
+        var row = results[j];
+        println("  - [" + row.id + "] " + row.name + " <" + row.email + ">");
+        j = j + 1;
+    }
+
+    // 5. Verify SQL Injection Protection
+    const tableCheck = db_query("SELECT name FROM sqlite_master WHERE type='table' AND name='users'");
+    if (tableCheck.length > 0) {
+        println("🛡️  SQL Injection Test: PASS (Table 'users' still exists)");
+    } else {
+        println("⚠️  SQL Injection Test: FAIL (Table 'users' was dropped!)");
+    }
+
+    db_close();
+    println("🏁 Verification Complete.");
+}
