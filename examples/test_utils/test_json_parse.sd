@@ -1,0 +1,15 @@
+import { json_parse } from "json";
+
+const raw = '{"name": "Sunda", "version": 1, "features": ["GUI", "Web", "DB"], "meta": {"stable": true, "author": null}}';
+const data = json_parse(raw);
+
+println("Name: " + data.name);
+println("Version: " + data.version);
+println("First Feature: " + data.features[0]);
+println("Stable: " + data.meta.stable);
+println("Author: " + data.meta.author);
+
+const listRaw = '[1, 2, "three"]';
+const list = json_parse(listRaw);
+println("List size: " + list.length);
+println("List item 2: " + list[2]);

@@ -48,30 +48,36 @@ db_execute("INSERT INTO users (name) VALUES (?)", ["Yudono"]);
 const users = db_query("SELECT * FROM users");
 ```
 
+### `json` Module
+The `json` module provides utilities for parsing and serializing JSON data.
+
+- `json_parse(string)`: Parses a JSON string and returns it as a Sunda `Value` (map, array, number, string, or boolean).
+
+Example:
+```javascript
+import { json_parse } from "json";
+const obj = json_parse('{"name": "Sunda", "stable": true}');
+println(obj.name); // Sunda
+```
+
 ### `webserver` Module
 The `webserver` module provides a low-level TCP/IP server with a high-level API.
 
 - `WebServer_create()`: Creates a new server instance.
-  - `app.get(path, handler)`: Registers a GET route. Supports `:param` syntax.
+  - `app.get(path, handler)`: Registers a GET route.
+  - `app.post(path, handler)`: Registers a POST route.
+  - `app.put(path, handler)`: Registers a PUT route.
+  - `app.delete(path, handler)`: Registers a DELETE route.
+  - `app.patch(path, handler)`: Registers a PATCH route.
   - `app.listen({ port })`: Starts the server.
-- `c.text(body)`: Helper to send a plain text response.
-- `c.html(body)`: Helper to send an HTML response.
-- `c.json(obj)`: Helper to send a JSON response.
-- `c.response(type, body)`: Generic helper for any Content-Type.
-- `c.req.param(name)`: Returns the value of a URL parameter.
-
-Example (Hono-like):
-```javascript
-import { WebServer_create } from "webserver";
-const app = WebServer_create();
-
-app.get("/hello/:name", (c) => {
-  const name = c.req.param("name");
-  return c.text("Hello, " + name);
-});
-
-app.listen({ port: 3000 });
-```
+- `c.text(body)`: Send plain text response.
+- `c.html(body)`: Send HTML response.
+- `c.json(obj)`: Send JSON response.
+- `c.response(type, body)`: Generic response helper.
+- `c.req.param(name)`: URL parameter.
+- `c.req.body`: Raw request body.
+- `c.req.json()`: Automatically parses JSON body.
+- `c.req.header(name)`: Access request header.
 
 ### `fs` Module
 File system operations.

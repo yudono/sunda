@@ -1,0 +1,20 @@
+import { WebServer_create } from "webserver";
+
+const app = WebServer_create();
+
+app.post("/api/echo", (c) => {
+    const body = c.req.json();
+    println("Received POST with body: " + c.req.body);
+    return c.json({
+        received: body,
+        status: "ok"
+    });
+});
+
+app.get("/headers", (c) => {
+    const userAgent = c.req.header("User-Agent");
+    return c.text("Your browser: " + userAgent);
+});
+
+println("Starting test server on port 3001...");
+app.listen({ port: 3001 });

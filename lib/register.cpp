@@ -17,6 +17,7 @@
 #include "os/os_lib.h"
 #include "exec/exec_lib.h"
 #include "regex/regex_lib.h"
+#include "json/json_lib.h"
 #include "register.h"
 
 // Forward declare GUI registration if it's still in sunda.cpp or move it?
@@ -59,4 +60,7 @@ void register_std_libs(Interpreter& interpreter) {
 
     // Regex
     RegexLib::register_regex(interpreter);
+
+    // JSON
+    JSONLib::register_json(interpreter);
 }

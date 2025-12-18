@@ -4,6 +4,7 @@
 #include "../../core/lang/interpreter.h"
 #include "tcp_server.h"
 #include "http_parser.h"
+#include "../json/json_lib.h"
 #include <map>
 #include <functional>
 
@@ -54,6 +55,7 @@ public:
                         std::map<std::string, Value> req_map;
                         req_map["path"] = Value(req.path, 0, false);
                         req_map["method"] = Value(req.method, 0, false);
+                        req_map["body"] = Value(req.body, 0, false);
                         
                         // Context.req.param(name)
                         req_map["param"] = Value([params](std::vector<Value> args) -> Value {
@@ -61,6 +63,20 @@ public:
                             std::string p = args[0].strVal;
                             if (params.count(p)) return Value(params.at(p), 0, false);
                             return Value("undefined", 0, false);
+                        });
+
+                        // Context.req.header(name)
+                        req_map["header"] = Value([req](std::vector<Value> args) -> Value {
+                            if (args.empty()) return Value("undefined", 0, false);
+                            std::string h = args[0].strVal;
+                            if (req.headers.count(h)) return Value(req.headers.at(h), 0, false);
+                            return Value("undefined", 0, false);
+                        });
+
+                        // Context.req.json()
+                        req_map["json"] = Value([req](std::vector<Value> args) -> Value {
+                            JSONLib::JsonParser parser(req.body);
+                            return parser.parse();
                         });
 
                         ctx_map["req"] = Value(req_map);
@@ -132,7 +148,31 @@ void register_webserver(Interpreter& interpreter) {
         server_obj["get"] = Value([instance](std::vector<Value> args) -> Value {
             if (args.size() < 2) return Value("", 0, false);
             instance->add_route("GET", args[0].strVal, args[1]);
-            return Value("", 1, true); // return this for chaining?
+            return Value("", 1, true); 
+        });
+
+        server_obj["post"] = Value([instance](std::vector<Value> args) -> Value {
+            if (args.size() < 2) return Value("", 0, false);
+            instance->add_route("POST", args[0].strVal, args[1]);
+            return Value("", 1, true);
+        });
+
+        server_obj["put"] = Value([instance](std::vector<Value> args) -> Value {
+            if (args.size() < 2) return Value("", 0, false);
+            instance->add_route("PUT", args[0].strVal, args[1]);
+            return Value("", 1, true);
+        });
+
+        server_obj["delete"] = Value([instance](std::vector<Value> args) -> Value {
+            if (args.size() < 2) return Value("", 0, false);
+            instance->add_route("DELETE", args[0].strVal, args[1]);
+            return Value("", 1, true);
+        });
+
+        server_obj["patch"] = Value([instance](std::vector<Value> args) -> Value {
+            if (args.size() < 2) return Value("", 0, false);
+            instance->add_route("PATCH", args[0].strVal, args[1]);
+            return Value("", 1, true);
         });
 
         server_obj["listen"] = Value([instance](std::vector<Value> args) -> Value {

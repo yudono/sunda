@@ -78,7 +78,7 @@ void Interpreter::execute(std::shared_ptr<Stmt> stmt) {
         if (imp->moduleName == "gui" || imp->moduleName == "math" || imp->moduleName == "string" || 
             imp->moduleName == "array" || imp->moduleName == "map" || imp->moduleName == "db" || 
             imp->moduleName == "webserver" || imp->moduleName == "fs" || imp->moduleName == "os" || 
-            imp->moduleName == "exec" || imp->moduleName == "regex") {
+            imp->moduleName == "exec" || imp->moduleName == "regex" || imp->moduleName == "json") {
             // Built-in module: import requested symbols
             if (!imp->symbols.empty()) {
                 // Import specific symbols: import { render_gui } from "gui"

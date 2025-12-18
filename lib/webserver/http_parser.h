@@ -41,12 +41,18 @@ public:
             }
         }
 
-        // Body (if any)
-        std::stringstream body_stream;
-        while (std::getline(stream, line)) {
-            body_stream << line << "\n";
+        // Body
+        if (req.headers.count("Content-Length")) {
+            size_t length = std::stoul(req.headers["Content-Length"]);
+            std::vector<char> body_buf(length);
+            stream.read(body_buf.data(), length);
+            req.body = std::string(body_buf.data(), length);
+        } else {
+             // Fallback for smaller/chunked? For now keep it simple.
+             std::stringstream body_stream;
+             body_stream << stream.rdbuf(); 
+             req.body = body_stream.str();
         }
-        req.body = body_stream.str();
 
         return req;
     }
