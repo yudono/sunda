@@ -13,6 +13,6 @@ http.get("/json", (ctx) => {
 println("Starting Secure Server on 3443...");
 http.listen({
     port: 3443,
-    cert: "examples/test_webserver/server.crt",
-    key: "examples/test_webserver/server.key"
+    // cert: "server.crt",
+    // key: "server.key"
 });

@@ -44,15 +44,18 @@ private:
         return ctx;
     }
 
-    void configure_context(SSL_CTX* ctx, const std::string& cert_file, const std::string& key_file) {
+    bool configure_context(SSL_CTX* ctx, const std::string& cert_file, const std::string& key_file) {
         if (SSL_CTX_use_certificate_file(ctx, cert_file.c_str(), SSL_FILETYPE_PEM) <= 0) {
             ERR_print_errors_fp(stderr);
             std::cerr << "Failed to load cert: " << cert_file << std::endl;
+            return false;
         }
         if (SSL_CTX_use_PrivateKey_file(ctx, key_file.c_str(), SSL_FILETYPE_PEM) <= 0) {
             ERR_print_errors_fp(stderr);
             std::cerr << "Failed to load key: " << key_file << std::endl;
+            return false;
         }
+        return true;
     }
 
 public:
@@ -71,7 +74,13 @@ public:
     bool initSSL(const std::string& cert, const std::string& key) {
         ssl_ctx = create_context();
         if (!ssl_ctx) return false;
-        configure_context(ssl_ctx, cert, key);
+        
+        if (!configure_context(ssl_ctx, cert, key)) {
+            SSL_CTX_free(ssl_ctx);
+            ssl_ctx = nullptr;
+            return false;
+        }
+
         use_ssl = true;
         return true;
     }
@@ -91,9 +100,16 @@ public:
         address.sin_port = htons(port);
 
         if (bind(server_fd, (struct sockaddr *)&address, sizeof(address)) < 0) {
+            std::cerr << "Bind failed: " << strerror(errno) << std::endl;
             close(server_fd);
             return false;
         }
+        
+        // Set receive timeout for accept to allow periodic interrupt check
+        struct timeval tv;
+        tv.tv_sec = 0;
+        tv.tv_usec = 500000; // 500ms
+        setsockopt(server_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
 
         if (listen(server_fd, 10) < 0) {
             close(server_fd);

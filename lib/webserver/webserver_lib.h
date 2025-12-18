@@ -7,6 +7,9 @@
 #include "../json/json_lib.h"
 #include <map>
 #include <functional>
+#include <atomic>
+
+extern std::atomic<bool> g_interrupt;
 
 namespace WebServer {
 
@@ -26,10 +29,25 @@ public:
     }
 
     void listen(int port, Interpreter& interpreter, std::string cert = "", std::string key = "") {
-        if (!cert.empty() && !key.empty()) {
-             if (!server.initSSL(cert, key)) {
-                 std::cerr << "Failed to init SSL" << std::endl;
-                 return;
+        std::string finalCert = cert;
+        std::string finalKey = key;
+
+        std::string scriptDir = "";
+        size_t lastSlash = interpreter.currentFile.find_last_of("/\\");
+        if (lastSlash != std::string::npos) {
+            scriptDir = interpreter.currentFile.substr(0, lastSlash + 1);
+        }
+
+        if (!cert.empty() && cert[0] != '/' && !scriptDir.empty()) {
+            finalCert = scriptDir + cert;
+        }
+        if (!key.empty() && key[0] != '/' && !scriptDir.empty()) {
+            finalKey = scriptDir + key;
+        }
+
+        if (!finalCert.empty() && !finalKey.empty()) {
+             if (!server.initSSL(finalCert, finalKey)) {
+                 std::cerr << "Failed to init SSL (files not found or invalid: " << finalCert << ", " << finalKey << "). Falling back to HTTP." << std::endl;
              }
         }
         
@@ -38,9 +56,9 @@ public:
             return;
         }
 
-        while (true) {
+        while (!g_interrupt) {
             TCPServer::Client client = server.accept_connection();
-            if (client.fd < 0) continue;
+            if (client.fd < 0) continue; // Timeout or error, loop back to check interrupt
 
             std::string raw_req = server.read_request(client);
             if (raw_req.empty()) {

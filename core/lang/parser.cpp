@@ -474,6 +474,7 @@ std::shared_ptr<Expr> Parser::primary() {
         std::map<std::string, std::shared_ptr<Expr>> props;
         if (!check(TOK_RBRACE)) {
             do {
+                if (check(TOK_RBRACE)) break; // Support trailing comma
                 // Check for spread operator
                 if (match(TOK_DOT_DOT_DOT)) {
                     std::shared_ptr<Expr> spreadExpr = expression();

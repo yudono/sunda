@@ -13,6 +13,17 @@
 #include "lib/gui/layout.h"
 #include "lib/register.h"
 #include <curl/curl.h>
+#include <csignal>
+#include <atomic>
+
+// Global interrupt flag
+std::atomic<bool> g_interrupt(false);
+
+void signal_handler(int signum) {
+    if (signum == SIGINT) {
+        g_interrupt = true;
+    }
+}
 
 // Define global appState needed by minigui
 AppState appState;
@@ -134,6 +145,7 @@ int runFile(std::string filePath, bool dumpTokens) {
 }
 
 int main(int argc, char* argv[]) {
+    signal(SIGINT, signal_handler);
     curl_global_init(CURL_GLOBAL_ALL);
 
     int result = 0;
