@@ -11,6 +11,7 @@ void bind_change(const std::string& id, std::function<void(std::string)> callbac
 void bind_str(const std::string& id, std::function<std::string()> callback);
 
 void trigger_click(const std::string& id);
+void trigger_change(const std::string& id, const std::string& newValue);
 std::string resolve_binding(const std::string& text);
 
 // Main Entry Point

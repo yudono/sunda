@@ -30,6 +30,10 @@ void trigger_click(const std::string& id) {
     else std::cout << "Warning: No click handler for " << id << std::endl;
 }
 
+void trigger_change(const std::string& id, const std::string& newValue) {
+    if (changeRegistry.count(id)) changeRegistry[id](newValue);
+}
+
 std::string resolve_binding(const std::string& text) {
     // Check if text is "{something}"
     if (text.size() > 2 && text.front() == '{' && text.back() == '}') {

@@ -36,7 +36,7 @@ bool button(float x, float y, float w, float h, const std::string& label,
 }
 
 void draw_textbox(TextBox& tb, float x, float y, float w, float h,
-                  double mx, double my, bool click) {
+                  double mx, double my, bool click, float fontSize) {
 
     if (click) {
         bool hover = mx > x && mx < x+w && my > y && my < y+h;
@@ -57,17 +57,17 @@ void draw_textbox(TextBox& tb, float x, float y, float w, float h,
     // Background - White
     rect(x, y, w, h, {1.0f, 1.0f, 1.0f, 1});
 
-    // Text - Dark Gray
+    // Text - Dark Gray with fontSize
     // Placeholder logic
     if (tb.value.empty() && !isActive) {
-        draw_text(x + 10, y + (h-16)/2, "Search...", 0.9f, {0.7f, 0.7f, 0.7f, 1});
+        draw_text(x + 10, y + (h-(16*fontSize))/2, "Search...", fontSize * 0.9f, {0.7f, 0.7f, 0.7f, 1});
     } else {
-        draw_text(x + 10, y + (h-16)/2, tb.value, 0.9f, {0.2f, 0.2f, 0.2f, 1});
+        draw_text(x + 10, y + (h-(16*fontSize))/2, tb.value, fontSize, {0.2f, 0.2f, 0.2f, 1});
     }
     
     // Cursor - Blinking? (Simplified: Just draw if active)
     if (isActive) {
-        float cursorX = x + 10 + measure_text_width(tb.value, 0.9f);
+        float cursorX = x + 10 + measure_text_width(tb.value, fontSize);
         rect(cursorX, y + 8, 2, h - 16, {0.2f, 0.2f, 0.2f, 1});
     }
 }

@@ -36,6 +36,8 @@ function App() {
                 <FormView
                     item={editItem || null}
                     onSave={(data) => {
+                        println("onSave received data:")
+                        println(data)
                         if (editItem) {
                             var updated = items.map((i) => {
                                 return i.id == editItem.id ? data : i

@@ -197,8 +197,9 @@ void render_node(const Node& n, float x, float& y, double mx, double my, bool cl
     if (n.tag == "Button") textCol = {1,1,1,1}; // Default white for button
     if (n.attrs.count("color")) textCol = parse_color(n.attrs.at("color"));
     
-    // Default font sizes: Text=28px (1.75x), Button=24px (1.5x)
-    float sizeScale = (n.tag == "Button") ? 1.5f : 1.75f;
+    // Default font sizes: Text=28px (1.75x), Button=24px (1.5x), Textfield=24px (1.5x)
+    float sizeScale = 1.75f; // Default for Text
+    if (n.tag == "Button" || n.tag == "Textfield") sizeScale = 1.5f; // 24px for Button and Textfield
     if (n.attrs.count("fontSize")) {
          float px = parse_dim(n.attrs.at("fontSize"), 100, 16);
          sizeScale = px / 16.0f; 
@@ -683,8 +684,23 @@ void render_node(const Node& n, float x, float& y, double mx, double my, bool cl
     } 
     else if (n.tag == "Textfield") {
         float tw = (w > 0) ? w : 300;
-        float th = (h > 0) ? h : 40; // larger default
-        draw_textbox(appState.notesBox, x, y, tw, th, mx, my, click);
+        float th = (h > 0) ? h : 40;
+        
+        // Store old value to detect changes
+        static std::string oldValue = appState.notesBox.value;
+        
+        // Draw textfield (user can type freely)
+        draw_textbox(appState.notesBox, x, y, tw, th, mx, my, click, sizeScale);
+        
+        // If value changed, trigger onInput callback
+        if (appState.notesBox.value != oldValue) {
+            if (n.attrs.count("onInput")) {
+                std::string callbackId = n.attrs.at("onInput");
+                trigger_change(callbackId, appState.notesBox.value);
+            }
+            oldValue = appState.notesBox.value;
+        }
+        
         y += th;
     }
     else if (n.tag == "Image") {

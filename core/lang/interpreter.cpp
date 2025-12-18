@@ -412,9 +412,14 @@ Value Interpreter::evaluate(std::shared_ptr<Expr> expr) {
              Value attrVal = evaluate(attr.second);
              if (key.substr(0, 2) == "on" && attrVal.isClosure) {
                  std::string id = "cb_" + std::to_string((uintptr_t)attrVal.closureBody.get());
-                 if (natives.count("bind_native_click")) {
+                 
+                 // Use bind_native_input for onInput, bind_native_click for others
+                 if (key == "onInput" && natives.count("bind_native_input")) {
+                     natives["bind_native_input"]({Value(id, 0, false), attrVal});
+                 } else if (natives.count("bind_native_click")) {
                      natives["bind_native_click"]({Value(id, 0, false), attrVal});
                  }
+                 
                  xml += " " + key + "=\"" + id + "\"";
                  continue;
              }

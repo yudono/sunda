@@ -30,6 +30,21 @@ struct GuiLib {
              return Value("", 0, true);
          });
          
+         // 2b. Bind Input (for Textfield onInput with value parameter)
+         interpreter.registerNative("bind_native_input", [&](std::vector<Value> args) {
+              if (args.size() >= 2 && args[1].isClosure) {
+                  std::string id = args[0].strVal;
+                  Value v = args[1]; // Capture closure
+                  bind_change(id, [id, v, &interpreter](std::string newValue) { 
+                      // Call closure with new value as parameter
+                      Value param(newValue, 0, false);
+                      interpreter.callClosure(v, {param});
+                      request_rerender(); 
+                  });
+              }
+              return Value("", 0, true);
+         });
+         
          // 3. Bridge setState (Hooks Style)
          interpreter.registerNative("setState", [&](std::vector<Value> args) {
               int idx = interpreter.hookIndex++;
@@ -82,5 +97,5 @@ struct GuiLib {
              }
              return Value("", 0, true);
          });
-    }
+     }
 };
