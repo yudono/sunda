@@ -24,7 +24,10 @@ function App() {
                         setView("form")
                     }}
                     onDelete={(id) => {
-                        setItems(items.filter(i => i.id != id))
+                        var filtered = items.filter((i) => {
+                            return i.id != id
+                        })
+                        setItems(filtered)
                     }}
                 />
             )}
@@ -34,18 +37,21 @@ function App() {
                     item={editItem}
                     onSave={(data) => {
                         if (editItem) {
-                            setItems(items.map(i =>
-                                i.id == editItem.id ? data : i
-                            ))
+                            var updated = items.map((i) => {
+                                return i.id == editItem.id ? data : i
+                            })
+                            setItems(updated)
                         } else {
                             setItems([
                                 ...items,
-                                { ...data, id: Date.now() }
+                                { ...data, id: DateNow() }
                             ])
                         }
                         setView("list")
                     }}
-                    onCancel={() => setView("list")}
+                    onCancel={() => {
+                        setView("list")
+                    }}
                 />
             )}
         </Page>

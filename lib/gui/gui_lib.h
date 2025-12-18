@@ -4,88 +4,82 @@
 
 struct GuiLib {
     static void register_gui(Interpreter& interpreter) {
+         // 1. Bind Click (Generic)
+         interpreter.registerNative("bind_native_click", [&](std::vector<Value> args) {
+              if (args.size() >= 2 && args[1].isClosure) {
+                  std::string id = args[0].strVal;
+                  Value v = args[1]; // Capture Value
+                  bind_click(id, [id, v, &interpreter]() { 
+                      interpreter.executeClosure(v); 
+                      request_rerender(); 
+                  });
+              }
+              return Value("", 0, true);
+         });
+         
+         // 2. Update Hook Native
+         interpreter.registerNative("updateHook", [&](std::vector<Value> args) {
+             if (args.size() >= 2) {
+                 int idx = args[0].intVal;
+                 Value newVal = args[1];
+                 if (idx >= 0 && idx < interpreter.hooks.size()) {
+                     interpreter.hooks[idx] = newVal;
+                     request_rerender();
+                 }
+             }
+             return Value("", 0, true);
+         });
+         
+         // 3. Bridge setState (Hooks Style)
+         interpreter.registerNative("setState", [&](std::vector<Value> args) {
+              int idx = interpreter.hookIndex++;
+              if (idx >= interpreter.hooks.size()) {
+                  if (args.empty()) {
+                      interpreter.hooks.push_back(Value("undefined", 0, false));
+                  } else {
+                      interpreter.hooks.push_back(args[0]);
+                  }
+              }
+              Value currentVal = interpreter.hooks[idx];
+              
+              Value setterClosure(std::make_shared<BlockStmt>(), nullptr, std::vector<std::string>{"newVal"});
+              setterClosure.isClosure = true;
+              setterClosure.isNative = true;
+              setterClosure.nativeFunc = [idx, &interpreter](std::vector<Value> innerArgs) {
+                   if (innerArgs.size() > 0) {
+                       interpreter.hooks[idx] = innerArgs[0];
+                       request_rerender();
+                   }
+                   return Value("", 0, true);
+              };
+              
+              // Return [value, setter]
+              std::vector<Value> retList;
+              retList.push_back(currentVal);
+              retList.push_back(setterClosure);
+              return Value(retList);
+         });
+
+         // 4. Render GUI
          interpreter.registerNative("render_gui", [&](std::vector<Value> args) {
              std::cout << "Starting GUI from Sunda..." << std::endl;
-             
-             // Bridge declarations
-             // Bind Click (Generic)
-             interpreter.registerNative("bind_native_click", [&](std::vector<Value> args) {
-                  if (args.size() >= 2 && args[1].isClosure) {
-                      std::string id = args[0].strVal;
-                      // bind_click is from minigui.h
-                      Value v = args[1]; // Capture Value
-                      bind_click(id, [id, v, &interpreter]() { 
-                          interpreter.executeClosure(v); 
-                          request_rerender(); 
-                      });
-                  }
-                  return Value("", 0, true);
-             });
-             
-             // Update Hook Native
-             interpreter.registerNative("updateHook", [&](std::vector<Value> args) {
-                 if (args.size() >= 2) {
-                     int idx = args[0].intVal;
-                     Value newVal = args[1];
-                     if (idx >= 0 && idx < interpreter.hooks.size()) {
-                         interpreter.hooks[idx] = newVal;
-                         request_rerender();
-                     }
-                 }
-                 return Value("", 0, true);
-             });
-             
-             // Bridge setState (Hooks Style)
-             interpreter.registerNative("setState", [&](std::vector<Value> args) {
-                  int idx = interpreter.hookIndex++;
+             if (args.size() > 0 && args[0].isClosure) {
+                  Value component = args[0]; // The App function
                   
-                  if (idx >= interpreter.hooks.size()) {
-                       Value init = args.empty() ? Value("", 0, true) : args[0];
-                       interpreter.hooks.push_back(init);
-                  }
-                  
-                  Value currentVal = interpreter.hooks[idx];
-                  
-                  // Synthesize Setter Closure: (val) => updateHook(idx, val)
-                  // AST: CallExpr(VarExpr("updateHook"), [Literal(idx), Var("val")])
-                  auto callExpr = std::make_shared<CallExpr>(std::make_shared<VarExpr>("updateHook"), std::vector<std::shared_ptr<Expr>>{
-                      std::make_shared<LiteralExpr>(std::to_string(idx), false),
-                      std::make_shared<VarExpr>("val")
+                  // Initialize Minigui with Main Loop
+                  render_gui([component, &interpreter]() -> std::string {
+                      interpreter.hookIndex = 0; // Reset hooks for render pass
+                      // interpreter.env_stack.clear(); // env_stack is not public? check interpreter.h
+                      // Actually, executeClosure creates new env scope.
+                      // If we clear env_stack, we might lose globals? No, env_stack likely local.
+                      // Let's remove env_stack logic if it's suspicious or check interpreter.h
+                      // For now, assume it's not needed or use provided logic.
+                      
+                      // Execute App()
+                      Value v = interpreter.callClosure(component, std::vector<Value>{});
+                      return v.toString();
                   });
-                  
-                  auto block = std::make_shared<BlockStmt>();
-                  block->statements.push_back(std::make_shared<ExprStmt>(callExpr));
-                  
-                  Value setterClosure(block, interpreter.environment, std::vector<std::string>{"val"});
-                  
-                  // Return List: [currentVal, setterClosure]
-                  std::vector<Value> retList;
-                  retList.push_back(currentVal);
-                  retList.push_back(setterClosure);
-                  return Value(retList);
-             });
-             
-             interpreter.registerNative("print", [&](std::vector<Value> args) {
-                 for (auto& a : args) std::cout << a.toString();
-                 return Value("", 0, true);
-             });
-             interpreter.registerNative("println", [&](std::vector<Value> args) {
-                 for (auto& a : args) std::cout << a.toString();
-                 std::cout << std::endl;
-                 return Value("", 0, true);
-             });
-
-              // Start Main Loop via minigui
-              render_gui([&](){
-                   interpreter.resetHooks(); // Reset index each render
-                   Value v = interpreter.getGlobal("App");
-                   if (v.isClosure) {
-                       Value ret = interpreter.callClosure(v);
-                       return ret.toString();
-                   }
-                   return std::string("<Page><Text>Error: App not found</Text></Page>");
-              });
-             
+             }
              return Value("", 0, true);
          });
     }

@@ -1,0 +1,9 @@
+// Test ternary operator
+var x = 1 < 2 ? "yes" : "no"
+println(x)
+
+var y = 5 > 10 ? 100 : 200
+println(y)
+
+var z = 0 ? "truthy" : "falsy"
+println(z)

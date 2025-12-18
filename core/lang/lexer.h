@@ -8,6 +8,7 @@
 class Lexer {
     std::string src;
     size_t pos = 0;
+    int line = 1;
 public:
     Lexer(const std::string& source) : src(source) {}
     std::vector<Token> tokenize();

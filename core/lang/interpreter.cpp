@@ -1,5 +1,6 @@
 #include "interpreter.h"
 #include <iostream>
+#include "../debugger.h"
 
 Interpreter::Interpreter() {
     globals = std::make_shared<Environment>();
@@ -104,6 +105,9 @@ void Interpreter::execute(std::shared_ptr<Stmt> stmt) {
             buffer << file.rdbuf();
             std::string source = buffer.str();
             
+            // Store source for debugging this file
+            this->sourceCode = source;
+            
             // Extract directory from filename for nested imports
             std::string oldBasePath = g_basePath;
             size_t lastSlash = filename.find_last_of('/');
@@ -121,7 +125,10 @@ void Interpreter::execute(std::shared_ptr<Stmt> stmt) {
             // Restore original basePath
             g_basePath = oldBasePath;
         } else {
-             std::cerr << "Runtime Error: Could not find module '" << imp->moduleName << "'" << std::endl;
+             // Import file
+             // For now, assume it's just loading matching file in same dir or lib
+             // ... import logic
+             Debugger::runtimeError("Could not find module '" + imp->moduleName + "'", 0);
         }
         return;
     }
@@ -132,9 +139,9 @@ void Interpreter::execute(std::shared_ptr<Stmt> stmt) {
              for (size_t i = 0; i < dest->names.size(); i++) {
                  environment->define(dest->names[i], (*init.listVal)[i]);
              }
-        } else {
-             std::cerr << "Runtime Error: Destructuring mismatch or not a list." << std::endl;
-        }
+         } else {
+             Debugger::runtimeError("Destructuring mismatch or not a list. Initializer type: " + std::to_string(init.isList) + ", Size: " + (init.listVal ? std::to_string(init.listVal->size()) : "null"), 0);
+         }
     }
     else if (auto exp = std::dynamic_pointer_cast<ExportStmt>(stmt)) {
         // Execute the declaration (function, var, etc)
@@ -243,20 +250,35 @@ Value Interpreter::evaluate(std::shared_ptr<Expr> expr) {
     }
     if (auto call = std::dynamic_pointer_cast<CallExpr>(expr)) {
         Value callee = evaluate(call->callee);
+        
         std::vector<Value> args;
-        for (auto& arg : call->args) args.push_back(evaluate(arg));
+        for (auto& arg : call->args) {
+            args.push_back(evaluate(arg));
+        }
         
         if (callee.isNative) {
             return callee.nativeFunc(args);
         }
         
         if (callee.isClosure) {
-            return callClosure(callee, args);
+             return callClosure(callee, args);
         }
         
-        // If callee was not found or not function
-        std::cerr << "Runtime Error: Attempt to call non-function: " << callee.toString() << std::endl;
-        return {"", 0, true};
+        std::string name = "expression";
+        if (auto var = std::dynamic_pointer_cast<VarExpr>(call->callee)) {
+            name = "'" + var->name + "'";
+        }
+        Debugger::runtimeError("Attempt to call non-function: " + name + " is " + callee.toString(), currentLine, sourceCode);
+        return {"", 0, true}; // Unreachable
+    }
+    if (auto ternary = std::dynamic_pointer_cast<TernaryExpr>(expr)) {
+        Value cond = evaluate(ternary->condition);
+        bool isTrue = (cond.isInt && cond.intVal != 0) || (!cond.isInt && !cond.strVal.empty());
+        if (isTrue) {
+            return evaluate(ternary->trueExpr);
+        } else {
+            return evaluate(ternary->falseExpr);
+        }
     }
     if (auto bin = std::dynamic_pointer_cast<BinaryExpr>(expr)) {
         if (bin->op == "+=") {
@@ -363,12 +385,18 @@ Value Interpreter::evaluate(std::shared_ptr<Expr> expr) {
         Value v = getVar(jsx->tagName);
         if (v.isClosure) {
              // User Component
-             // Call it
-             Value ret = callClosure(v, {}); // Use Value
+             // Capture props
+             std::map<std::string, Value> props;
+             for (auto const& attr : jsx->attributes) {
+                  props[attr.first] = evaluate(attr.second);
+             }
+             
+             // Call it with props
+             Value ret = callClosure(v, { Value(props) }); // Use Value
              return ret;
-        }
-        
-        std::string xml = "<" + jsx->tagName;
+         }
+         
+         std::string xml = "<" + jsx->tagName;
         for (auto const& attr : jsx->attributes) {
              std::string key = attr.first;
              Value attrVal = evaluate(attr.second);
@@ -389,7 +417,11 @@ Value Interpreter::evaluate(std::shared_ptr<Expr> expr) {
             xml += ">";
             for(auto c : jsx->children) {
                  Value cv = evaluate(c);
-                 xml += cv.toString();
+                 // Skip falsy values (for conditional rendering: {condition && <Component />})
+                 bool isFalsy = (cv.isInt && cv.intVal == 0) || (!cv.isInt && cv.strVal.empty());
+                 if (!isFalsy) {
+                     xml += cv.toString();
+                 }
             }
             xml += "</" + jsx->tagName + ">";
         }
@@ -400,7 +432,20 @@ Value Interpreter::evaluate(std::shared_ptr<Expr> expr) {
     if (auto obj = std::dynamic_pointer_cast<ObjectExpr>(expr)) {
         std::map<std::string, Value> map;
         for (auto const& prop : obj->properties) {
-            map[prop.first] = evaluate(prop.second);
+            // Check if this is a spread property
+            if (prop.first.find("__spread_") == 0) {
+                if (auto spread = std::dynamic_pointer_cast<SpreadExpr>(prop.second)) {
+                    Value spreadVal = evaluate(spread->argument);
+                    // Merge spread object properties into current object
+                    if (!spreadVal.isInt && spreadVal.mapVal) {
+                        for (auto const& kv : *spreadVal.mapVal) {
+                            map[kv.first] = kv.second;
+                        }
+                    }
+                }
+            } else {
+                map[prop.first] = evaluate(prop.second);
+            }
         }
         return Value(map);
     }
@@ -417,7 +462,7 @@ Value Interpreter::evaluate(std::shared_ptr<Expr> expr) {
                     }
                 } else if (spreadVal.isMap && spreadVal.mapVal) {
                     // Spread object (future: for object literals)
-                    std::cerr << "Warning: Spread of objects in arrays not yet supported" << std::endl;
+                    Debugger::warning("Spread of objects in arrays not yet supported", "", 0);
                 }
             } else {
                 list.push_back(evaluate(e));
@@ -433,6 +478,55 @@ Value Interpreter::evaluate(std::shared_ptr<Expr> expr) {
             key = k.toString();
         } else {
             if (auto lit = std::dynamic_pointer_cast<LiteralExpr>(mem->property)) key = lit->value;
+        }
+        
+        // DEBUG
+        // std::cout << "DEBUG: MemberExpr obj.isList=" << obj.isList << " key=" << key << " line=" << currentLine << std::endl;
+        
+        // List Methods
+        if (obj.isList && obj.listVal) {
+             if (key == "length") return Value("", (int)obj.listVal->size(), true);
+             
+             if (key == "push") {
+                 Value method([obj](std::vector<Value> args) mutable -> Value {
+                     for(auto& a : args) obj.listVal->push_back(a);
+                     return Value("", (int)obj.listVal->size(), true);
+                 });
+                 method.isNative = true;
+                 return method;
+             }
+             
+             if (key == "filter") {
+                 Value method([obj, this](std::vector<Value> args) mutable -> Value {
+                     if (args.empty() || !args[0].isClosure) return Value(std::vector<Value>{});
+                     Value callback = args[0];
+                     std::vector<Value> result;
+                     for(auto& item : *obj.listVal) {
+                         Value ret = this->callClosure(callback, {item});
+                         if ((ret.isInt && ret.intVal != 0) || (!ret.isInt && !ret.strVal.empty())) {
+                             result.push_back(item);
+                         }
+                     }
+                     return Value(result);
+                 });
+                 method.isNative = true;
+                 return method;
+             }
+             
+             if (key == "map") {
+                 Value method([obj, this](std::vector<Value> args) mutable -> Value {
+                     if (args.empty() || !args[0].isClosure) return Value(std::vector<Value>{});
+                     Value callback = args[0];
+                     std::vector<Value> result;
+                     for(auto& item : *obj.listVal) {
+                         Value ret = this->callClosure(callback, {item});
+                         result.push_back(ret);
+                     }
+                     return Value(result);
+                 });
+                 method.isNative = true;
+                 return method;
+             }
         }
         
         if (obj.isMap && obj.mapVal) {
@@ -518,9 +612,13 @@ Value Interpreter::callClosure(Value closure, std::vector<Value> args) {
         for (size_t i = 0; i < closure.closureParams.size() && i < args.size(); i++) {
             std::string param = closure.closureParams[i];
             // Check if this is a destructuring pattern
-            if (param.length() > 12 && param.substr(0, 12) == "__destruct:{") {
-                // Extract property names from pattern: "__destruct:{a,b,c}"
-                std::string pattern = param.substr(12, param.length() - 13);
+            bool isDestruct = (param.length() > 12 && param.substr(0, 12) == "__destruct:{") || (param.front() == '{' && param.back() == '}');
+            if (isDestruct) {
+                // Extract property names form pattern
+                std::string pattern;
+                if (param.front() == '{') pattern = param.substr(1, param.length() - 2);
+                else pattern = param.substr(12, param.length() - 13);
+                
                 std::vector<std::string> props;
                 size_t start = 0;
                 size_t comma = pattern.find(',');

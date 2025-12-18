@@ -1,5 +1,6 @@
 #include "parser.h"
 #include <iostream>
+#include "../debugger.h"
 
 std::vector<std::shared_ptr<Stmt>> Parser::parse() {
     std::vector<std::shared_ptr<Stmt>> statements;
@@ -199,6 +200,14 @@ std::shared_ptr<Expr> Parser::expression() {
 std::shared_ptr<Expr> Parser::assignment() {
     std::shared_ptr<Expr> expr = logicalOr();
     
+    // Ternary operator: condition ? trueExpr : falseExpr
+    if (match(TOK_QUESTION)) {
+        std::shared_ptr<Expr> trueExpr = expression();
+        consume(TOK_COLON, "Expect ':' after true expression in ternary.");
+        std::shared_ptr<Expr> falseExpr = assignment();
+        return std::make_shared<TernaryExpr>(expr, trueExpr, falseExpr);
+    }
+    
     if (match(TOK_EQ)) {
         std::shared_ptr<Expr> value = assignment();
         if (auto var = std::dynamic_pointer_cast<VarExpr>(expr)) {
@@ -207,7 +216,8 @@ std::shared_ptr<Expr> Parser::assignment() {
         if (auto mem = std::dynamic_pointer_cast<MemberExpr>(expr)) {
             return std::make_shared<BinaryExpr>(mem, "=", value);
         }
-        std::cerr << "Invalid assignment target." << std::endl;
+    Debugger::parseError("Invalid assignment target.", "", peek().line);
+    return expr;
     }
     if (match(TOK_PLUS_EQUAL)) {
         std::shared_ptr<Expr> value = assignment();
@@ -240,9 +250,12 @@ std::shared_ptr<Expr> Parser::logicalAnd() {
 std::shared_ptr<Expr> Parser::equality() {
     std::shared_ptr<Expr> expr = comparison();
     while (match(TOK_EQEQ) || match(TOK_NE)) {
-        std::string op = previous().type == TOK_EQEQ ? "==" : "!=";
+        Token opToken = previous();
+        std::string op = opToken.type == TOK_EQEQ ? "==" : "!=";
         std::shared_ptr<Expr> right = comparison();
-        expr = std::make_shared<BinaryExpr>(expr, op, right);
+        auto bin = std::make_shared<BinaryExpr>(expr, op, right);
+        bin->line = opToken.line;
+        expr = bin;
     }
     return expr;
 }
@@ -250,13 +263,16 @@ std::shared_ptr<Expr> Parser::equality() {
 std::shared_ptr<Expr> Parser::comparison() {
     std::shared_ptr<Expr> expr = term();
     while (match(TOK_LT) || match(TOK_GT) || match(TOK_LTE) || match(TOK_GTE)) {
+        Token opToken = previous();
         std::string op;
-        if (previous().type == TOK_LT) op = "<";
-        else if (previous().type == TOK_GT) op = ">";
-        else if (previous().type == TOK_LTE) op = "<=";
-        else if (previous().type == TOK_GTE) op = ">=";
+        if (opToken.type == TOK_LT) op = "<";
+        else if (opToken.type == TOK_GT) op = ">";
+        else if (opToken.type == TOK_LTE) op = "<=";
+        else if (opToken.type == TOK_GTE) op = ">=";
         std::shared_ptr<Expr> right = term();
-        expr = std::make_shared<BinaryExpr>(expr, op, right);
+        auto bin = std::make_shared<BinaryExpr>(expr, op, right);
+        bin->line = opToken.line;
+        expr = bin;
     }
     return expr;
 }
@@ -282,48 +298,111 @@ std::shared_ptr<Expr> Parser::factor() {
 }
 
 std::shared_ptr<Expr> Parser::primary() {
-    if (match(TOK_NUMBER)) return std::make_shared<LiteralExpr>(previous().text, false);
-    if (match(TOK_STRING)) return std::make_shared<LiteralExpr>(previous().text, true);
+    if (match(TOK_NUMBER)) {
+        auto expr = std::make_shared<LiteralExpr>(previous().text, false);
+        expr->line = previous().line;
+        return expr;
+    }
+    if (match(TOK_STRING)) {
+        auto expr = std::make_shared<LiteralExpr>(previous().text, true);
+        expr->line = previous().line;
+        return expr;
+    }
     
+    // Arrow Function: param => ... (Single param, no parens)
+    if (check(TOK_IDENTIFIER) && peekNext().type == TOK_ARROW) {
+        std::string param = advance().text;
+        int line = previous().line;
+        consume(TOK_ARROW, "Expect '=>'");
+        
+        std::shared_ptr<BlockStmt> body = std::make_shared<BlockStmt>();
+        if (match(TOK_LBRACE)) {
+             while (!check(TOK_RBRACE) && !isAtEnd()) {
+                 body->statements.push_back(declaration());
+             }
+             consume(TOK_RBRACE, "Expect '}'");
+        } else {
+             // Expression body: param => expr -> implicit return
+             std::shared_ptr<Expr> expr = expression();
+             body->statements.push_back(std::make_shared<ReturnStmt>(expr));
+        }
+        auto fn = std::make_shared<FunctionExpr>(std::vector<std::string>{param}, body);
+        fn->line = line;
+        return fn;
+    }
+
     // Identifier
     if (match(TOK_IDENTIFIER)) {
-        return std::make_shared<VarExpr>(previous().text);
+        auto var = std::make_shared<VarExpr>(previous().text);
+        var->line = previous().line;
+        return var;
     }
     
     // Object Literal
     if (match(TOK_LBRACE)) {
+        Token lbraceToken = previous(); // Capture token for line number
         std::map<std::string, std::shared_ptr<Expr>> props;
         if (!check(TOK_RBRACE)) {
             do {
-                Token key = consume(TOK_IDENTIFIER, "Expect key.");
-                consume(TOK_COLON, "Expect ':' after key.");
-                std::shared_ptr<Expr> val = expression();
-                props[key.text] = val;
+                // Check for spread operator
+                if (match(TOK_DOT_DOT_DOT)) {
+                    std::shared_ptr<Expr> spreadExpr = expression();
+                    // Store spread with special key prefix
+                    static int spreadCounter = 0;
+                    auto spread = std::make_shared<SpreadExpr>(spreadExpr);
+                    spread->line = previous().line; // Line of '...'
+                    props["__spread_" + std::to_string(spreadCounter++)] = spread;
+                } else {
+                    Token key = consume(TOK_IDENTIFIER, "Expect key.");
+                    
+                    if (match(TOK_COLON)) {
+                         std::shared_ptr<Expr> val = expression();
+                         props[key.text] = val;
+                    } else {
+                         // Shorthand { key } -> { key: key }
+                         auto var = std::make_shared<VarExpr>(key.text);
+                         var->line = key.line;
+                         props[key.text] = var;
+                         
+                         // If we don't have comma or brace, it might still be error, 
+                         // but loop check will handle it.
+                    }
+                }
             } while (match(TOK_COMMA));
         }
         consume(TOK_RBRACE, "Expect '}' after object literal.");
-        return std::make_shared<ObjectExpr>(props);
+        auto objExpr = std::make_shared<ObjectExpr>(props);
+        objExpr->line = lbraceToken.line; // Line of '{'
+        return objExpr;
     }
     
     // Array Literal
     if (match(TOK_LBRACKET)) {
+        Token lbracketToken = previous(); // Capture token for line number
         std::vector<std::shared_ptr<Expr>> elements;
         if (!check(TOK_RBRACKET)) {
             do {
                 if (match(TOK_DOT_DOT_DOT)) {
                     auto arg = expression();
-                    elements.push_back(std::make_shared<SpreadExpr>(arg));
+                    auto spread = std::make_shared<SpreadExpr>(arg);
+                    spread->line = previous().line; // Line of '...'
+                    elements.push_back(spread);
                 } else {
                     elements.push_back(expression());
                 }
             } while (match(TOK_COMMA));
         }
         consume(TOK_RBRACKET, "Expect ']' after array literal.");
-        return std::make_shared<ArrayExpr>(elements);
+        auto arrayExpr = std::make_shared<ArrayExpr>(elements);
+        arrayExpr->line = lbracketToken.line; // Line of '['
+        return arrayExpr;
     }
+    
+
     
     // Grouping or Lambda: ( ) or (a, b) =>
     if (match(TOK_LPAREN)) {
+        Token lparenToken = previous(); // Capture token for line number
         // Need to lookahead to see if it is Arrow Function
         // Complex lookahead needed or we speculative parse?
         // Let's assume for now if we see identifiers separated by commas followed by ')' it MIGHT be lambda
@@ -355,12 +434,18 @@ std::shared_ptr<Expr> Parser::primary() {
              if (t.type == TOK_ARROW) {
                  consume(TOK_RPAREN, "Expect ')'");
                  consume(TOK_ARROW, "Expect '=>'");
-                 consume(TOK_LBRACE, "Expect '{'");
-                 std::shared_ptr<BlockStmt> body = std::make_shared<BlockStmt>();
-                 while (!check(TOK_RBRACE) && !isAtEnd()) {
-                     body->statements.push_back(declaration()); // error: identifier not found
-                 }
-                 consume(TOK_RBRACE, "Expect '}'");
+                  
+                  std::shared_ptr<BlockStmt> body = std::make_shared<BlockStmt>();
+                  if (match(TOK_LBRACE)) {
+                      while (!check(TOK_RBRACE) && !isAtEnd()) {
+                          body->statements.push_back(declaration());
+                      }
+                      consume(TOK_RBRACE, "Expect '}'");
+                  } else {
+                      // Expression body
+                      std::shared_ptr<Expr> expr = expression();
+                      body->statements.push_back(std::make_shared<ReturnStmt>(expr));
+                  }
                  return std::make_shared<FunctionExpr>(std::vector<std::string>{}, body);
              }
              // Legacy () { ... }
@@ -376,6 +461,47 @@ std::shared_ptr<Expr> Parser::primary() {
              }
         }
         
+        // Try to parse as arrow function parameter list: (a, b) => {...}
+        // Lookahead: if we see IDENTIFIER (COMMA IDENTIFIER)* RPAREN ARROW, it's params
+        // Try to parse as arrow function parameter list: (a, b) => {...}
+        if (check(TOK_IDENTIFIER)) {
+            size_t savedPos = current;
+            std::vector<std::string> params;
+            params.push_back(advance().text);
+            
+            while (match(TOK_COMMA)) {
+                if (check(TOK_IDENTIFIER)) {
+                    params.push_back(advance().text);
+                } else {
+                    current = savedPos;
+                    params.clear();
+                    break;
+                }
+            }
+            
+            if (!params.empty() && check(TOK_RPAREN) && peekNext().type == TOK_ARROW) {
+                consume(TOK_RPAREN, "Expect ')'");
+                consume(TOK_ARROW, "Expect '=>'");
+                
+                std::shared_ptr<BlockStmt> body = std::make_shared<BlockStmt>();
+                if (match(TOK_LBRACE)) {
+                    while (!check(TOK_RBRACE) && !isAtEnd()) {
+                        body->statements.push_back(declaration());
+                    }
+                    consume(TOK_RBRACE, "Expect '}'");
+                } else {
+                    // Expression body
+                    std::shared_ptr<Expr> expr = expression();
+                    body->statements.push_back(std::make_shared<ReturnStmt>(expr));
+                }
+                return std::make_shared<FunctionExpr>(params, body);
+            } else {
+                // Not arrow function, restore position
+                current = savedPos;
+            }
+        }
+        
+        
         // If not empty, it's Expression OR Params.
         // Only way to distinguish is `=>`.
         // Let's parse as Expression first.
@@ -387,12 +513,24 @@ std::shared_ptr<Expr> Parser::primary() {
         if (match(TOK_ARROW)) {
              // It WAS a lambda. checking if expr is valid param list.
              // Single param `(a)` -> `VarExpr`.
+             // Multiple params would be parsed as CallExpr: `(a, b)` -> CallExpr with callee=a, args=[b]
              std::vector<std::string> params;
              if (auto v = std::dynamic_pointer_cast<VarExpr>(expr)) {
                  params.push_back(v->name);
+             } else if (auto call = std::dynamic_pointer_cast<CallExpr>(expr)) {
+                 // This is actually a parameter list disguised as a call
+                 // callee is first param, args are rest
+                 if (auto firstParam = std::dynamic_pointer_cast<VarExpr>(call->callee)) {
+                     params.push_back(firstParam->name);
+                     for (auto& arg : call->args) {
+                         if (auto paramVar = std::dynamic_pointer_cast<VarExpr>(arg)) {
+                             params.push_back(paramVar->name);
+                         }
+                     }
+                 }
              } else {
                  // Error: (1+1) => ... invalid
-                 std::cerr << "Invalid parameter list for arrow function." << std::endl;
+                 Debugger::parseError("Invalid parameter list for arrow function.", "", peek().line);
              }
              
              consume(TOK_LBRACE, "Expect '{' for lambda body.");
@@ -411,8 +549,7 @@ std::shared_ptr<Expr> Parser::primary() {
     if (match(TOK_LT)) {
         // Tag Name (Identifier usually, or generic)
         if (!match(TOK_IDENTIFIER)) {
-             std::cerr << "Expect tag name." << std::endl;
-             // recover?
+             Debugger::parseError("Expect tag name.", peek().text, peek().line);
         }
         std::string tagName = previous().text;
         std::map<std::string, std::shared_ptr<Expr>> attrs;
@@ -432,7 +569,7 @@ std::shared_ptr<Expr> Parser::primary() {
                            val = expression();
                            consume(TOK_RBRACE, "Expect '}' after attribute expression.");
                       } else {
-                           std::cerr << "Expect string or {expr} for attribute value." << std::endl;
+                           Debugger::parseError("Expect string or {expr} for attribute value.", peek().text, peek().line);
                       }
                  }
                  attrs[key] = val;
@@ -492,14 +629,14 @@ std::shared_ptr<Expr> Parser::primary() {
         consume(TOK_SLASH, "Expect '/'.");
         if (match(TOK_IDENTIFIER)) {
              if (previous().text != tagName) {
-                  std::cerr << "Mismatch closing tag: expected " << tagName << ", got " << previous().text << std::endl;
+                  Debugger::parseError("Mismatch closing tag: expected " + tagName + ", got " + previous().text, previous().text, previous().line);
              }
         }
         consume(TOK_GT, "Expect '>' after closing tag.");
         return std::make_shared<JsxExpr>(tagName, attrs, children);
     }
     
-    std::cerr << "Unexpected token: " << peek().text << std::endl;
+    Debugger::parseError("Unexpected token.", peek().text, peek().line);
     throw std::runtime_error("Unexpected token in primary expression.");
 }
 
@@ -516,16 +653,23 @@ std::shared_ptr<Expr> Parser::call() {
                 } while (match(TOK_COMMA));
             }
             consume(TOK_RPAREN, "Expect ')' after arguments.");
-            expr = std::make_shared<CallExpr>(expr, args);
+            auto call = std::make_shared<CallExpr>(expr, args);
+            call->line = previous().line; // Closing paren line
+            expr = call;
         }
         else if (match(TOK_DOT)) {
             Token name = consume(TOK_IDENTIFIER, "Expect property name after '.'.");
-            expr = std::make_shared<MemberExpr>(expr, std::make_shared<LiteralExpr>(name.text, true), false);
+            auto member = std::make_shared<MemberExpr>(expr, std::make_shared<LiteralExpr>(name.text, true), false);
+            member->line = name.line;
+            expr = member;
         }
         else if (match(TOK_LBRACKET)) {
-            std::shared_ptr<Expr> index = expression();
-            consume(TOK_RBRACKET, "Expect ']' after index.");
-            expr = std::make_shared<MemberExpr>(expr, index, true);
+             auto index = expression();
+             consume(TOK_RBRACKET, "Expect ']' after index.");
+             Token bracket = previous();
+             auto member = std::make_shared<MemberExpr>(expr, index, true);
+             member->line = bracket.line;
+             expr = member;
         }
         else {
             break;
@@ -566,6 +710,6 @@ Token Parser::previous() {
 }
 Token Parser::consume(TokenType t, std::string err) {
     if (check(t)) return advance();
-    std::cerr << "Parse Error: " << err << " at " << peek().text << std::endl;
+    Debugger::parseError(err, peek().text, peek().line);
     throw std::runtime_error(err);
 }

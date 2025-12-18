@@ -1,0 +1,14 @@
+// Test object spread
+var base = { name: "Alice", age: 25 }
+var extended = { ...base, city: "Jakarta" }
+
+println("base: ", base)
+println("extended: ", extended)
+
+// Test overriding
+var override = { ...base, age: 30, country: "Indonesia" }
+println("override: ", override)
+
+// Test with DateNow
+var item = { ...base, id: DateNow() }
+println("item with id: ", item)

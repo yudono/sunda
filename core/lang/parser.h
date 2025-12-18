@@ -10,8 +10,14 @@
 #include "lexer.h"
 
 // AST Base
-struct Stmt { virtual ~Stmt() = default; };
-struct Expr { virtual ~Expr() = default; };
+struct Stmt { 
+    virtual ~Stmt() = default; 
+    int line = 0;
+};
+struct Expr { 
+    virtual ~Expr() = default; 
+    int line = 0;
+};
 
 // Expressions
 struct LiteralExpr : Expr {
@@ -58,6 +64,14 @@ struct BinaryExpr : Expr {
     std::string op;
     std::shared_ptr<Expr> right;
     BinaryExpr(std::shared_ptr<Expr> l, std::string o, std::shared_ptr<Expr> r) : left(l), op(o), right(r) {}
+};
+
+struct TernaryExpr : Expr {
+    std::shared_ptr<Expr> condition;
+    std::shared_ptr<Expr> trueExpr;
+    std::shared_ptr<Expr> falseExpr;
+    TernaryExpr(std::shared_ptr<Expr> c, std::shared_ptr<Expr> t, std::shared_ptr<Expr> f) 
+        : condition(c), trueExpr(t), falseExpr(f) {}
 };
 
 // Statements

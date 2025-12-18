@@ -1,0 +1,8 @@
+// Test DateNow()
+var timestamp = DateNow()
+println("Timestamp: ", timestamp)
+println("Type check: ", timestamp > 0)
+
+// Use in myapp context
+var id = DateNow()
+println("Generated ID: ", id)

@@ -7,6 +7,7 @@
 // Include Libs
 #include "math/math.h"
 #include "gui/gui_lib.h"
+#include "date/date_lib.h"
 #include "register.h"
 
 // Forward declare GUI registration if it's still in sunda.cpp or move it?
@@ -19,4 +20,7 @@ void register_std_libs(Interpreter& interpreter) {
     
     // GUI
     GuiLib::register_gui(interpreter);
+    
+    // Date
+    DateLib::register_date(interpreter);
 }

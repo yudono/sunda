@@ -1,0 +1,24 @@
+import { render_gui } from "gui"
+
+function App() {
+    var showText = 1
+    var hideText = 0
+
+    return (
+        <Page width="100%" height="100%">
+            <Column width="100%" alignItems="center">
+                <View height="40px" />
+                <Text fontSize="24px">Conditional JSX Test</Text>
+                <View height="20px" />
+
+                {showText && <Text fontSize="18px" color="#27ae60">This should show!</Text>}
+                <View height="10px" />
+                {hideText && <Text fontSize="18px" color="#e74c3c">This should NOT show!</Text>}
+                <View height="10px" />
+                <Text fontSize="16px">End of test</Text>
+            </Column>
+        </Page>
+    )
+}
+
+render_gui(App)

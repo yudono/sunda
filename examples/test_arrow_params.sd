@@ -1,0 +1,12 @@
+// Test arrow function with parameters
+var add = (a, b) => {
+    return a + b
+}
+
+println("add(5, 3) = ", add(5, 3))
+
+var greet = (name) => {
+    return "Hello " + name
+}
+
+println(greet("World"))
