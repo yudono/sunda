@@ -1,106 +1,116 @@
-CXX = clang++
-CXXFLAGS = -std=c++11 -Wall -O2 -I/opt/homebrew/include -I/opt/homebrew/include/freetype2 -Wno-deprecated-declarations -Wno-c++11-narrowing
-LDFLAGS = -L/opt/homebrew/lib -framework OpenGL -framework Cocoa -framework IOKit -framework CoreVideo -lglfw -lfreetype
+# Detect Operating System
+ifeq ($(OS),Windows_NT)
+    OS_NAME = windows
+    EXE_EXT = .exe
+else
+    UNAME_S := $(shell uname -s)
+    ifeq ($(UNAME_S),Darwin)
+        OS_NAME = macos
+    else
+        OS_NAME = linux
+    endif
+    EXE_EXT =
+endif
 
-BUILD_DIR = build
+# Compiler and Basic Flags
+CXX = clang++
+CXXFLAGS = -std=c++11 -Wall -O2 -Wno-deprecated-declarations -Wno-c++11-narrowing
+
+# OS-specific settings
+ifeq ($(OS_NAME),macos)
+    HOMEBREW_PREFIX = /opt/homebrew
+    INCLUDES = -I$(HOMEBREW_PREFIX)/include -I$(HOMEBREW_PREFIX)/include/freetype2
+    LDFLAGS = -L$(HOMEBREW_PREFIX)/lib -framework OpenGL -framework Cocoa -framework IOKit -framework CoreVideo -lglfw -lfreetype
+else ifeq ($(OS_NAME),linux)
+    INCLUDES = $(shell pkg-config --cflags glfw3 freetype2)
+    LDFLAGS = $(shell pkg-config --libs glfw3 freetype2) -lGL -lX11 -lpthread -ldl
+else ifeq ($(OS_NAME),windows)
+    # Assuming MinGW/clang on Windows with libraries in standard paths
+    INCLUDES = -I/usr/include/freetype2
+    LDFLAGS = -lglfw3 -lfreetype -lgdi32 -lopengl32 -lwinmm
+endif
+
+# Common Includes
+INCLUDES += -Ilib/gui -Icore/lang -I.
+
+# Directory Structure
+BUILD_ROOT = build
+BIN_ROOT = bin
+BUILD_DIR = $(BUILD_ROOT)/$(OS_NAME)
+BIN_DIR = $(BIN_ROOT)/$(OS_NAME)
+
 # Source directories
 GUI_DIR = lib/gui
 
 # Source files
-# LANG_SRC = $(wildcard core/lang/*.cpp) # Use manual list if wildcard issues
 LANG_SRC = core/lang/lexer.cpp core/lang/parser.cpp core/lang/interpreter.cpp core/lang/value_impl.cpp
-LIB_SRC = lib/register.cpp lib/string/string.cpp
+LIB_SRC = lib/register.cpp lib/string/string.cpp lib/array/array.cpp lib/map/map.cpp
 GUI_SRC = lib/gui/renderer.cpp lib/gui/parser.cpp lib/gui/widgets.cpp lib/gui/layout.cpp lib/gui/minigui.cpp
 MAIN_SRC = sunda.cpp
 
-# Object files
-LANG_OBJ = $(patsubst core/lang/%.cpp, build/lang_%.o, $(LANG_SRC))
-LIB_OBJ = build/register.o build/string_string.o build/array_array.o build/map_map.o
-GUI_OBJ = $(patsubst lib/gui/%.cpp, build/gui_%.o, $(GUI_SRC)) # Adjusted to match build rule
-MAIN_OBJ = build/sunda.o
+# Object files (placed in BUILD_DIR)
+LANG_OBJ = $(patsubst core/lang/%.cpp, $(BUILD_DIR)/lang_%.o, $(LANG_SRC))
+LIB_OBJ = $(BUILD_DIR)/register.o $(BUILD_DIR)/string_string.o $(BUILD_DIR)/array_array.o $(BUILD_DIR)/map_map.o
+GUI_OBJ = $(patsubst lib/gui/%.cpp, $(BUILD_DIR)/gui_%.o, $(GUI_SRC))
+MAIN_OBJ = $(BUILD_DIR)/sunda.o
 
-# Define OBJS for the default target
 OBJS = $(MAIN_OBJ) $(LIB_OBJ) $(LANG_OBJ) $(GUI_OBJ)
 
-TARGET = build/sunda
+TARGET_NAME = sunda$(EXE_EXT)
+TARGET = $(BUILD_DIR)/$(TARGET_NAME)
+FINAL_BIN = $(BIN_DIR)/$(TARGET_NAME)
 
-# Include directories
-INCLUDES = -I/opt/homebrew/include -I/opt/homebrew/include/freetype2 -Ilib/gui -Icore/lang -I.
+.PHONY: all clean check_deps setup copy sunda
 
-all: clean $(TARGET)
+all: check_deps setup $(TARGET) copy
+
+# Check for required tools and libraries
+check_deps:
+	@echo "Checking dependencies for $(OS_NAME)..."
+	@command -v $(CXX) >/dev/null 2>&1 || { echo >&2 "Error: $(CXX) is not installed."; exit 1; }
+ifeq ($(OS_NAME),macos)
+	@ls $(HOMEBREW_PREFIX)/lib/libglfw.dylib >/dev/null 2>&1 || { echo >&2 "Error: glfw not found in $(HOMEBREW_PREFIX)"; exit 1; }
+	@ls $(HOMEBREW_PREFIX)/lib/libfreetype.dylib >/dev/null 2>&1 || { echo >&2 "Error: freetype not found in $(HOMEBREW_PREFIX)"; exit 1; }
+else ifeq ($(OS_NAME),linux)
+	@pkg-config --exists glfw3 || { echo >&2 "Error: glfw3 not found via pkg-config"; exit 1; }
+	@pkg-config --exists freetype2 || { echo >&2 "Error: freetype2 not found via pkg-config"; exit 1; }
+endif
+	@echo "Dependencies OK."
+
+setup:
+	@mkdir -p $(BUILD_DIR)
+	@mkdir -p $(BIN_DIR)
 
 # Build rules
-build/gui_%.o: $(GUI_DIR)/%.cpp
-	@mkdir -p build
+$(BUILD_DIR)/gui_%.o: $(GUI_DIR)/%.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
-build/main.o: main.cpp
-	@mkdir -p build
+$(BUILD_DIR)/lang_%.o: core/lang/%.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
-# Manual mapping for clarity due to mixed sources
-build/renderer.o: $(GUI_DIR)/renderer.cpp
-	@mkdir -p build
+$(BUILD_DIR)/register.o: lib/register.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
-build/parser.o: $(GUI_DIR)/parser.cpp
-	@mkdir -p build
+$(BUILD_DIR)/string_string.o: lib/string/string.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
-build/widgets.o: $(GUI_DIR)/widgets.cpp
-	@mkdir -p build
+$(BUILD_DIR)/array_array.o: lib/array/array.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
-build/layout.o: $(GUI_DIR)/layout.cpp
-	@mkdir -p build
+$(BUILD_DIR)/map_map.o: lib/map/map.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
-build/minigui.o: $(GUI_DIR)/minigui.cpp
-	@mkdir -p build
+$(BUILD_DIR)/sunda.o: sunda.cpp
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
 
-# Standard link
 $(TARGET): $(OBJS)
-	@mkdir -p $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(OBJS) -o $(TARGET) $(LDFLAGS)
 
-counter: build/counter.o build/renderer.o build/parser.o build/widgets.o build/layout.o build/minigui.o
-	@mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $^ -o $(BUILD_DIR)/counter $(LDFLAGS)
+copy: $(TARGET)
+	@cp $(TARGET) $(FINAL_BIN)
+	@echo "Build successful! Binary location: $(FINAL_BIN)"
 
-# Sunda Language
-build/sunda.o: sunda.cpp
-	@mkdir -p build
-	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
-
-# Pattern rule for language sources
-build/lang_%.o: core/lang/%.cpp
-	@mkdir -p build
-	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
-
-build/register.o: lib/register.cpp
-	@mkdir -p build
-	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
-
-build/string_string.o: lib/string/string.cpp
-	@mkdir -p build
-	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
-
-build/array_array.o: lib/array/array.cpp
-	@mkdir -p build
-	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
-
-build/map_map.o: lib/map/map.cpp
-	@mkdir -p build
-	$(CXX) $(CXXFLAGS) $(INCLUDES) -c $< -o $@
-
-SUNDA_OBJS = build/sunda.o build/register.o build/lang_lexer.o build/lang_parser.o build/lang_interpreter.o build/lang_value_impl.o \
-             build/renderer.o build/parser.o build/widgets.o build/layout.o build/minigui.o
-
-sunda: $(SUNDA_OBJS)
-	@mkdir -p $(BUILD_DIR)
-	$(CXX) $(CXXFLAGS) $(INCLUDES) $(SUNDA_OBJS) -o $(BUILD_DIR)/sunda $(LDFLAGS)
-
+sunda: all
 
 clean:
-	rm -rf $(BUILD_DIR)
+	rm -rf $(BUILD_ROOT) $(BIN_ROOT)
