@@ -25,6 +25,79 @@ std::shared_ptr<Stmt> Parser::declaration() {
         return std::make_shared<ExportStmt>(decl);
     }
     
+    // Duplicated import block removed
+    
+    if (match(TOK_CLASS)) {
+        Token name = consume(TOK_IDENTIFIER, "Expect class name.");
+        std::string superclass = "";
+        if (match(TOK_EXTENDS)) {
+            superclass = consume(TOK_IDENTIFIER, "Expect superclass name.").text;
+        }
+        
+        consume(TOK_LBRACE, "Expect '{' before class body.");
+        
+        auto classStmt = std::make_shared<ClassStmt>(name.text, superclass);
+        
+        while (!check(TOK_RBRACE) && !isAtEnd()) {
+            bool isStatic = match(TOK_STATIC);
+            bool isGetter = match(TOK_GET);
+            bool isSetter = match(TOK_SET);
+            
+            bool isPrivate = false;
+            Token memberName;
+            if (match(TOK_PRIVATE_IDENTIFIER)) {
+                isPrivate = true;
+                memberName = previous();
+            } else {
+                memberName = consume(TOK_IDENTIFIER, "Expect member name.");
+            }
+            
+            if (match(TOK_LPAREN)) {
+                // Method
+                std::vector<std::string> params;
+                if (!check(TOK_RPAREN)) {
+                    do {
+                        params.push_back(consume(TOK_IDENTIFIER, "Expect parameter name.").text);
+                    } while (match(TOK_COMMA));
+                }
+                consume(TOK_RPAREN, "Expect ')' after parameters.");
+                consume(TOK_LBRACE, "Expect '{' before method body.");
+                
+                std::shared_ptr<BlockStmt> body = std::make_shared<BlockStmt>();
+                while (!check(TOK_RBRACE) && !isAtEnd()) {
+                    body->statements.push_back(declaration());
+                }
+                consume(TOK_RBRACE, "Expect '}' after method body.");
+                
+                ClassStmt::Method method;
+                method.name = memberName.text;
+                method.params = params;
+                method.body = body;
+                method.isStatic = isStatic;
+                method.isGetter = isGetter;
+                method.isSetter = isSetter;
+                method.isPrivate = isPrivate;
+                classStmt->methods.push_back(method);
+            } else {
+                // Field
+                std::shared_ptr<Expr> init = nullptr;
+                if (match(TOK_EQ)) {
+                    init = expression();
+                }
+                consume(TOK_SEMICOLON, "Expect ';' after field declaration.");
+                ClassStmt::Field field;
+                field.name = memberName.text;
+                field.initializer = init;
+                field.isStatic = isStatic;
+                field.isPrivate = isPrivate;
+                classStmt->fields.push_back(field);
+            }
+        }
+        
+        consume(TOK_RBRACE, "Expect '}' after class body.");
+        return classStmt;
+    }
+    
     if (match(TOK_VAR)) {
         Token name = consume(TOK_IDENTIFIER, "Expect variable name.");
         std::shared_ptr<Expr> init = nullptr;
@@ -362,6 +435,39 @@ std::shared_ptr<Expr> Parser::primary() {
         return var;
     }
     
+    if (match(TOK_THIS)) {
+        auto t = std::make_shared<ThisExpr>();
+        t->line = previous().line;
+        return t;
+    }
+    
+    if (match(TOK_SUPER)) {
+        Token keyword = previous();
+        std::shared_ptr<Expr> property = nullptr;
+        if (match(TOK_DOT)) {
+            property = std::make_shared<VarExpr>(consume(TOK_IDENTIFIER, "Expect superclass method name.").text);
+        }
+        auto s = std::make_shared<SuperExpr>(keyword, property);
+        s->line = keyword.line;
+        return s;
+    }
+    
+    if (match(TOK_NEW)) {
+        int line = previous().line;
+        std::string name = consume(TOK_IDENTIFIER, "Expect class name after 'new'.").text;
+        consume(TOK_LPAREN, "Expect '(' after class name.");
+        std::vector<std::shared_ptr<Expr>> args;
+        if (!check(TOK_RPAREN)) {
+            do {
+                args.push_back(expression());
+            } while (match(TOK_COMMA));
+        }
+        consume(TOK_RPAREN, "Expect ')' after arguments.");
+        auto n = std::make_shared<NewExpr>(name, args);
+        n->line = line;
+        return n;
+    }
+    
     // Object Literal
     if (match(TOK_LBRACE)) {
         Token lbraceToken = previous(); // Capture token for line number
@@ -685,7 +791,15 @@ std::shared_ptr<Expr> Parser::call() {
             expr = call;
         }
         else if (match(TOK_DOT)) {
-            Token name = consume(TOK_IDENTIFIER, "Expect property name after '.'.");
+            Token name;
+            if (check(TOK_PRIVATE_IDENTIFIER)) {
+                name = advance(); 
+            } else if (check(TOK_GET) || check(TOK_SET) || check(TOK_CLASS) || check(TOK_STATIC) || check(TOK_THIS) || check(TOK_SUPER)) {
+                 name = advance(); // Treat keyword as identifier
+                 name.type = TOK_IDENTIFIER; // Re-type as ID for safety
+            } else {
+                name = consume(TOK_IDENTIFIER, "Expect property name after '.'.");
+            }
             auto member = std::make_shared<MemberExpr>(expr, std::make_shared<LiteralExpr>(name.text, true), false);
             member->line = name.line;
             expr = member;

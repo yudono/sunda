@@ -1,0 +1,57 @@
+println("--- OOP Basic Test ---");
+
+// 1. Basic Class
+class Person {
+    name = "";
+    age = 0;
+
+    constructor(name, age) {
+        this.name = name;
+        this.age = age;
+    }
+
+    greet() {
+        println("Hello, I am " + this.name + " (" + this.age + ")");
+    }
+}
+
+var p = new Person("John", 25);
+p.greet(); // Hello, I am John (25)
+
+// 2. Inheritance
+class Employee extends Person {
+    role = "";
+
+    constructor(name, age, role) {
+        super(name, age);
+        this.role = role;
+    }
+
+    work() {
+        println(this.name + " is working as " + this.role);
+        super.greet(); // Test super call
+    }
+}
+
+var e = new Employee("Alice", 30, "Dev");
+e.greet(); // Inherited
+e.work();
+
+// 3. Static
+class MathUtil {
+    static PI = 3.14;
+    static area(r) {
+        return MathUtil.PI * r * r;
+    }
+}
+
+println("PI: " + MathUtil.PI);
+println("Area(5): " + MathUtil.area(5));
+
+// 4. Fields init without constructor
+class Rect {
+    w = 10;
+    h = 20;
+}
+var r = new Rect();
+println("Rect: " + r.w + "x" + r.h);

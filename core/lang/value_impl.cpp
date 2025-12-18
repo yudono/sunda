@@ -18,6 +18,10 @@ Value::Value(std::map<std::string, Value> map) : strVal(""), intVal(0), isInt(fa
 
 Value::Value(NativeFunc func) : strVal("native"), intVal(0), isInt(false), nativeFunc(func), isNative(true) {}
 
+Value::Value(std::shared_ptr<Class> c) : strVal("class"), intVal(0), isInt(false), isClass(true), classVal(c) {}
+
+Value::Value(std::shared_ptr<Instance> i) : strVal("instance"), intVal(0), isInt(false), isInstance(true), instanceVal(i) {}
+
 Value::Value() : strVal(""), intVal(0), isInt(false) {}
 
 std::string Value::toString() const { 
@@ -41,6 +45,8 @@ std::string Value::toString() const {
         s += "}";
         return s;
     }
+    if (isClass && classVal) return "[Class " + classVal->name + "]";
+    if (isInstance && instanceVal) return "[Instance of " + instanceVal->klass->name + "]";
     return isInt ? std::to_string(intVal) : strVal; 
 }
 
@@ -70,6 +76,20 @@ std::string Value::toJson() const {
         s += "}";
         return s;
     }
+    if (isInstance && instanceVal) {
+        std::string s = "{";
+        size_t i = 0;
+        for (auto const& pair : instanceVal->fields) {
+            if (pair.first.find("#") != 0) { // Don't serialize private fields to JSON
+                s += "\"" + pair.first + "\":" + pair.second.toJson();
+                if (++i < instanceVal->fields.size()) s += ",";
+            }
+        }
+        // Remove trailing comma if any
+        if (s.back() == ',') s.pop_back();
+        s += "}";
+        return s;
+    }
     
     if (strVal == "null" || strVal == "undefined") return "null";
     if (isClosure || isNative) return "null";
@@ -83,4 +103,42 @@ std::string Value::toJson() const {
         pos += 2;
     }
     return "\"" + escaped + "\"";
+}
+
+Value Class::findMethod(const std::string& name) {
+    if (methods.count(name)) return methods[name];
+    if (superclass) return superclass->findMethod(name);
+    return Value("undefined", 0, false);
+}
+
+Value Class::findGetter(const std::string& name) {
+    if (getters.count(name)) return getters[name];
+    if (superclass) return superclass->findGetter(name);
+    return Value("undefined", 0, false);
+}
+
+Value Class::findSetter(const std::string& name) {
+    if (setters.count(name)) return setters[name];
+    if (superclass) return superclass->findSetter(name);
+    return Value("undefined", 0, false);
+}
+
+Value Instance::get(const std::string& name) {
+    if (fields.count(name)) return fields[name];
+    if (privateFields.count(name)) return privateFields[name];
+    
+    Value method = klass->findMethod(name);
+    if (!method.strVal.empty() && method.isClosure) {
+        return method; // This will be bound by evaluate(MemberExpr) or CallExpr
+    }
+    
+    return Value("undefined", 0, false);
+}
+
+void Instance::set(const std::string& name, Value value) {
+    if (name.find("#") == 0) {
+        privateFields[name] = value;
+    } else {
+        fields[name] = value;
+    }
 }

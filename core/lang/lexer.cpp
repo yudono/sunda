@@ -33,11 +33,24 @@ std::vector<Token> Lexer::tokenize() {
             else if (ident == "default") addToken(TOK_DEFAULT, ident);
             else if (ident == "const") addToken(TOK_CONST, ident);
             else if (ident == "else") addToken(TOK_ELSE, ident);
+            else if (ident == "class") addToken(TOK_CLASS, ident);
+            else if (ident == "new") addToken(TOK_NEW, ident);
+            else if (ident == "extends") addToken(TOK_EXTENDS, ident);
+            else if (ident == "super") addToken(TOK_SUPER, ident);
+            else if (ident == "static") addToken(TOK_STATIC, ident);
+            else if (ident == "this") addToken(TOK_THIS, ident);
+            else if (ident == "get") addToken(TOK_GET, ident);
+            else if (ident == "set") addToken(TOK_SET, ident);
             else addToken(TOK_IDENTIFIER, ident);
         } else if (isdigit(c)) {
             // ...
             std::string num;
             while (isdigit(peek())) num += advance();
+            // check for float
+            if (peek() == '.' && pos + 1 < src.size() && isdigit(src[pos+1])) {
+                 num += advance(); // .
+                 while (isdigit(peek())) num += advance();
+            }
             addToken(TOK_NUMBER, num);
         } else if (c == '"') {
              // ...
@@ -100,6 +113,13 @@ std::vector<Token> Lexer::tokenize() {
                  } else {
                       addToken(TOK_DOT, ".");
                  }
+            }
+            else if (c == '#') {
+                 // Private identifier #field
+                 // advance() already consumed '#'
+                 std::string ident = "#";
+                 while (isalnum(peek()) || peek() == '_') ident += advance();
+                 addToken(TOK_PRIVATE_IDENTIFIER, ident);
             }
             else if (c == '+') {
                  if (peek() == '=') { advance(); addToken(TOK_PLUS_EQUAL, "+="); }

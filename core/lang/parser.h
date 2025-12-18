@@ -59,6 +59,22 @@ struct SpreadExpr : Expr {
     SpreadExpr(std::shared_ptr<Expr> arg) : argument(arg) {}
 };
 
+struct ThisExpr : Expr {
+    // keyword is 'this'
+};
+
+struct SuperExpr : Expr {
+    Token keyword;
+    std::shared_ptr<Expr> property; // for super.method()
+    SuperExpr(Token k, std::shared_ptr<Expr> p = nullptr) : keyword(k), property(p) {}
+};
+
+struct NewExpr : Expr {
+    std::string className;
+    std::vector<std::shared_ptr<Expr>> args;
+    NewExpr(std::string name, std::vector<std::shared_ptr<Expr>> a) : className(name), args(a) {}
+};
+
 struct UnaryExpr : Expr {
     std::string op;
     std::shared_ptr<Expr> right;
@@ -166,6 +182,32 @@ struct ExportStmt : Stmt {
 struct ExprStmt : Stmt {
     std::shared_ptr<Expr> expr;
     ExprStmt(std::shared_ptr<Expr> e) : expr(e) {}
+};
+
+struct ClassStmt : Stmt {
+    struct Method {
+        std::string name;
+        std::vector<std::string> params;
+        std::shared_ptr<BlockStmt> body;
+        bool isStatic = false;
+        bool isGetter = false;
+        bool isSetter = false;
+        bool isPrivate = false;
+    };
+    
+    struct Field {
+        std::string name;
+        std::shared_ptr<Expr> initializer;
+        bool isStatic = false;
+        bool isPrivate = false;
+    };
+    
+    std::string name;
+    std::string superclass; // name of parent class
+    std::vector<Method> methods;
+    std::vector<Field> fields;
+    
+    ClassStmt(std::string n, std::string s = "") : name(n), superclass(s) {}
 };
 
 class Parser {

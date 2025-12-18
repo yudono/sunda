@@ -9,6 +9,8 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <cstring>
+#include <openssl/ssl.h>
+#include <openssl/err.h>
 
 namespace WebServer {
 
@@ -17,10 +19,62 @@ private:
     int server_fd = -1;
     int port = 3000;
     bool running = false;
+    
+    // SSL State
+    SSL_CTX* ssl_ctx = nullptr;
+    bool use_ssl = false;
+
+    void init_openssl() {
+        SSL_load_error_strings();
+        OpenSSL_add_ssl_algorithms();
+    }
+
+    void cleanup_openssl() {
+        EVP_cleanup();
+    }
+
+    SSL_CTX* create_context() {
+        const SSL_METHOD* method = TLS_server_method();
+        SSL_CTX* ctx = SSL_CTX_new(method);
+        if (!ctx) {
+            perror("Unable to create SSL context");
+            ERR_print_errors_fp(stderr);
+            return nullptr;
+        }
+        return ctx;
+    }
+
+    void configure_context(SSL_CTX* ctx, const std::string& cert_file, const std::string& key_file) {
+        if (SSL_CTX_use_certificate_file(ctx, cert_file.c_str(), SSL_FILETYPE_PEM) <= 0) {
+            ERR_print_errors_fp(stderr);
+            std::cerr << "Failed to load cert: " << cert_file << std::endl;
+        }
+        if (SSL_CTX_use_PrivateKey_file(ctx, key_file.c_str(), SSL_FILETYPE_PEM) <= 0) {
+            ERR_print_errors_fp(stderr);
+            std::cerr << "Failed to load key: " << key_file << std::endl;
+        }
+    }
 
 public:
-    TCPServer() {}
-    ~TCPServer() { stop(); }
+    struct Client {
+        int fd;
+        SSL* ssl;
+    };
+
+    TCPServer() { init_openssl(); }
+    ~TCPServer() { 
+        stop(); 
+        if (ssl_ctx) SSL_CTX_free(ssl_ctx);
+        cleanup_openssl();
+    }
+    
+    bool initSSL(const std::string& cert, const std::string& key) {
+        ssl_ctx = create_context();
+        if (!ssl_ctx) return false;
+        configure_context(ssl_ctx, cert, key);
+        use_ssl = true;
+        return true;
+    }
 
     bool start(int p) {
         port = p;
@@ -58,26 +112,57 @@ public:
         running = false;
     }
 
-    int accept_client() {
-        if (!running) return -1;
+    Client accept_connection() {
+        if (!running) return {-1, nullptr};
         struct sockaddr_in client_addr;
         socklen_t client_len = sizeof(client_addr);
-        return accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
+        int fd = accept(server_fd, (struct sockaddr *)&client_addr, &client_len);
+        
+        if (fd < 0) return {-1, nullptr};
+        
+        SSL* ssl = nullptr;
+        if (use_ssl) {
+            ssl = SSL_new(ssl_ctx);
+            SSL_set_fd(ssl, fd);
+            if (SSL_accept(ssl) <= 0) {
+                ERR_print_errors_fp(stderr);
+                SSL_free(ssl);
+                close(fd);
+                return {-1, nullptr};
+            }
+        }
+        
+        return {fd, ssl};
     }
 
-    std::string read_request(int client_fd) {
+    std::string read_request(Client client) {
         char buffer[4096] = {0};
-        int valread = read(client_fd, buffer, sizeof(buffer));
+        int valread = 0;
+        
+        if (client.ssl) {
+             valread = SSL_read(client.ssl, buffer, sizeof(buffer));
+        } else {
+             valread = read(client.fd, buffer, sizeof(buffer));
+        }
+        
         if (valread <= 0) return "";
         return std::string(buffer, valread);
     }
-
-    void send_response(int client_fd, const std::string& response) {
-        write(client_fd, response.c_str(), response.length());
+    
+    void send_response(Client client, const std::string& response) {
+        if (client.ssl) {
+             SSL_write(client.ssl, response.c_str(), response.length());
+        } else {
+             write(client.fd, response.c_str(), response.length());
+        }
     }
 
-    void close_client(int client_fd) {
-        close(client_fd);
+    void close_client(Client client) {
+        if (client.ssl) {
+             SSL_shutdown(client.ssl);
+             SSL_free(client.ssl);
+        }
+        close(client.fd);
     }
 };
 

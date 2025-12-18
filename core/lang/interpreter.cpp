@@ -54,6 +54,7 @@ Value Interpreter::getVar(std::string name) {
 
 void Interpreter::registerNative(std::string name, std::function<Value(std::vector<Value>)> func) {
     natives[name] = func;
+    globals->define(name, Value(func));
 }
 
 void Interpreter::interpret(const std::vector<std::shared_ptr<Stmt>>& statements) {
@@ -245,6 +246,57 @@ void Interpreter::execute(std::shared_ptr<Stmt> stmt) {
             }
         }
     }
+    else if (auto classStmt = std::dynamic_pointer_cast<ClassStmt>(stmt)) {
+        std::shared_ptr<Class> superclass = nullptr;
+        if (!classStmt->superclass.empty()) {
+            Value sc = getVar(classStmt->superclass);
+            if (!sc.isClass || !sc.classVal) {
+                Debugger::runtimeError("Superclass must be a class.", classStmt->line);
+            }
+            superclass = sc.classVal;
+        }
+
+        // Define class name in environment to allow recursive references inside methods (though 'this' is preferred)
+        // Actually, we usually define it after creation.
+        environment->define(classStmt->name, Value()); 
+
+        auto klass = std::make_shared<Class>(classStmt->name, superclass);
+        
+        // Methods
+        for (auto& m : classStmt->methods) {
+            Value method(m.body, environment, m.params); // Capture closure
+            method.isNative = false; 
+            
+            if (m.isStatic) {
+                klass->staticFields[m.name] = method;
+            } else if (m.isGetter) {
+                method.isGetter = true;
+                klass->getters[m.name] = method;
+            } else if (m.isSetter) {
+                method.isSetter = true;
+                klass->setters[m.name] = method;
+            } else {
+                klass->methods[m.name] = method;
+            }
+        }
+        
+        // Fields
+        for (auto& f : classStmt->fields) {
+            if (f.isStatic) {
+                Value val = {"undefined", 0, false};
+                if (f.initializer) {
+                    val = evaluate(f.initializer); 
+                }
+                klass->staticFields[f.name] = val;
+            } else {
+                // Instance fields: store initializer expression to be evaluated on instantiation
+                klass->instanceFields[f.name] = f.initializer;
+                if (f.isPrivate) klass->privateFieldNames.push_back(f.name);
+            }
+        }
+        
+        environment->assign(classStmt->name, Value(klass));
+    }
     else if (auto exprStmt = std::dynamic_pointer_cast<ExprStmt>(stmt)) {
         lastExpressionValue = evaluate(exprStmt->expr);
         hasLastExpressionValue = true;
@@ -274,6 +326,136 @@ Value Interpreter::evaluate(std::shared_ptr<Expr> expr) {
     }
     if (auto var = std::dynamic_pointer_cast<VarExpr>(expr)) {
         return getVar(var->name);
+    }
+    if (auto t = std::dynamic_pointer_cast<ThisExpr>(expr)) {
+        return getVar("this");
+    }
+    if (auto s = std::dynamic_pointer_cast<SuperExpr>(expr)) {
+        // Need to resolve 'super'
+        // 'super' keyword logic:
+        // We need 'this' and the superclass.
+        // Usually handled by looking up 'super' in environment if we bound it?
+        // Or finding 'this' finding its class's superclass?
+        // Simplest: Resolving 'super' requires 'this' to be bound to an instance, 
+        // and we need to know the class where the method was defined.
+        // Complex to implement strictly correctly (traits/mixins etc).
+        // Naive approach: get("super")? Or just get("this").class.superclass?
+        
+        // BETTER: When calling a method on super, we look up method on superclass 
+        // but bind 'this' to current instance.
+        
+        // Let's assume we bind "super" in the environment of methods?
+        // Or we just fetch 'this' and traverse up 1 level? 
+        // Issue: if passing 'this', getting class, getting superclass -> infinite loop if calling same method name.
+        // Correct way: The closure needs to know its "HomeObject" (ES6).
+        
+        // FOR NOW: Simplified. Bind "super" in constructor/methods if extends?
+        // Let's use getVar("super") approach. We must define it when entering method.
+        Value sup = getVar("super");
+        if (s->property) {
+             // super.method
+             if (sup.isClass && sup.classVal) {
+                  Value method = sup.classVal->findMethod(std::dynamic_pointer_cast<VarExpr>(s->property)->name);
+                  
+                  if (method.isClosure) {
+                       Value instance = getVar("this");
+                       auto boundEnv = std::make_shared<Environment>(method.closureEnv);
+                       boundEnv->define("this", instance);
+                       if (sup.classVal->superclass) {
+                           boundEnv->define("super", Value(sup.classVal->superclass));
+                       }
+                       
+                       Value boundMethod = method;
+                       boundMethod.closureEnv = boundEnv;
+                       return boundMethod;
+                  }
+                  return method;
+             }
+        }
+        
+        // super() constructor call
+        if (sup.isClass && sup.classVal) {
+             Value ctor = sup.classVal->findMethod("constructor");
+             if (ctor.isClosure) {
+                 // Bind 'this' to current instance
+                 Value instance = getVar("this");
+                 
+                 auto boundEnv = std::make_shared<Environment>(ctor.closureEnv);
+                 boundEnv->define("this", instance);
+                 if (sup.classVal->superclass) {
+                     boundEnv->define("super", Value(sup.classVal->superclass));
+                 }
+                 
+                 Value boundCtor = ctor;
+                 boundCtor.closureEnv = boundEnv;
+                 return boundCtor;
+             }
+        }
+        return sup;
+    }
+    if (auto n = std::dynamic_pointer_cast<NewExpr>(expr)) {
+         Value val = getVar(n->className);
+         if (!val.isClass || !val.classVal) {
+             Debugger::runtimeError("Operands must be a class.", n->line);
+         }
+         
+         auto instance = std::make_shared<Instance>(val.classVal);
+         Value instVal(instance);
+         
+         // Initialize instance fields
+         // Need to walk up inheritance chain? JS does.
+         // Simplified: Just evaluating this class's fields. Inheritance of fields -> usually done by super() call in JS.
+         // BUT standard JS fields are added to instance.
+         // Let's initialize fields for the class hierarchy here?
+         // Actually, constructors call super() which should init parent fields.
+         // BUT we have field declarations in class body now.
+         // Let's evaluate them here for THIS class. Parent logic depends on super() call? 
+         // JS Class Fields: added when class is constructed/super returns.
+         
+         // Let's implement: Iterate whole hierarchy and init fields (easier than hooking super())
+         // Or just hook super()?
+         // Let's do: Init fields for this class.
+         for (auto const& field : val.classVal->instanceFields) {
+             if (field.second) {
+                 // Evaluate initializer in context of NEW instance? or Global?
+                 // JS: evaluated in context of constructor?
+                 // Should create a temp scope?
+                 // Usually fields are simple literals. If referring to 'this', we need scope.
+                 Value init = evaluate(field.second);
+                 instance->set(field.first, init);
+             } else {
+                 instance->set(field.first, Value("undefined", 0, false));
+             }
+         }
+         
+         // Constructor call
+         Value ctor = val.classVal->findMethod("constructor");
+         if (ctor.isClosure) {
+            std::vector<Value> args;
+            for(auto& a : n->args) args.push_back(evaluate(a));
+            
+            // Call constructor with 'this' bound to instance
+            // callClosure(ctor, args); // REMOVED: using manual logic below
+            
+            // Temporary manual call logic for constructor to inject 'this'
+            // Create environment for method
+            auto methodEnv = std::make_shared<Environment>(ctor.closureEnv);
+            methodEnv->define("this", instVal);
+            // define "super"
+            if (val.classVal->superclass) {
+                 methodEnv->define("super", Value(val.classVal->superclass));
+            }
+
+            // Bind params
+            for (size_t i = 0; i < ctor.closureParams.size(); i++) {
+                if (i < args.size()) methodEnv->define(ctor.closureParams[i], args[i]);
+                else methodEnv->define(ctor.closureParams[i], {"undefined", 0, false});
+            }
+            
+            executeBlock(std::dynamic_pointer_cast<BlockStmt>(ctor.closureBody), methodEnv);
+         }
+         
+         return instVal;
     }
     if (auto unary = std::dynamic_pointer_cast<UnaryExpr>(expr)) {
         Value right = evaluate(unary->right);
@@ -325,28 +507,64 @@ Value Interpreter::evaluate(std::shared_ptr<Expr> expr) {
             }
         }
         if (bin->op == "=") {
+            Value val = evaluate(bin->right);
             if (auto var = std::dynamic_pointer_cast<VarExpr>(bin->left)) {
-                 Value val = evaluate(bin->right);
-                 setVar(var->name, val);
-                 return val;
-            }
-            if (auto mem = std::dynamic_pointer_cast<MemberExpr>(bin->left)) {
+                environment->assign(var->name, val);
+                return val;
+            } else if (auto mem = std::dynamic_pointer_cast<MemberExpr>(bin->left)) {
+                // Object property set
                 Value obj = evaluate(mem->object);
-                Value val = evaluate(bin->right);
                 std::string key;
-                
                 if (mem->computed) {
-                    Value k = evaluate(mem->property);
-                    key = k.toString();
-                } else {
-                    if (auto lit = std::dynamic_pointer_cast<LiteralExpr>(mem->property)) key = lit->value;
+                    key = evaluate(mem->property).toString();
+                } else if (auto lit = std::dynamic_pointer_cast<LiteralExpr>(mem->property)) { // Changed check from VarExpr
+                     // Parser produces LiteralExpr for non-computed property? 
+                     // Parser.primary produced LiteralExpr for .property? 
+                     // Looking at Parser::primary member access...
+                     // Wait, in Parser::call(), we parse .identifier. 
+                     // We need to check how MemberExpr is constructed for dot notation.
+                     // Parser code: 
+                     // consume(TOK_DOT)
+                     // name = consume(TOK_IDENTIFIER)
+                     // property = std::make_shared<LiteralExpr>(name.text, true) <-- Logic I should assume.
+                     // Let's verify Parser::call logic later. Assuming LiteralExpr for now.
+                     key = lit->value;
+                } else if (auto v = std::dynamic_pointer_cast<VarExpr>(mem->property)) {
+                     // Sometimes we might use VarExpr?
+                     key = v->name;
                 }
-                
+
                 if (obj.isMap && obj.mapVal) {
                     (*obj.mapVal)[key] = val;
                     return val;
                 }
+                if (obj.isInstance && obj.instanceVal) {
+                    // Check setter
+                    Value setter = obj.instanceVal->klass->findSetter(key);
+                    if (setter.isClosure) {
+                         // Invoke setter
+                         // Bind 'this'
+                         auto boundEnv = std::make_shared<Environment>(setter.closureEnv);
+                         boundEnv->define("this", obj);
+                         if (obj.instanceVal->klass->superclass) {
+                             boundEnv->define("super", Value(obj.instanceVal->klass->superclass));
+                         }
+                         // Param name? Usually setters have 1 param.
+                         std::string paramName = setter.closureParams.size() > 0 ? setter.closureParams[0] : "value";
+                         boundEnv->define(paramName, val);
+                         
+                         executeBlock(std::dynamic_pointer_cast<BlockStmt>(setter.closureBody), boundEnv);
+                         return val;
+                    }
+                    obj.instanceVal->set(key, val);
+                    return val;
+                }
+                if (obj.isClass && obj.classVal) {
+                    obj.classVal->staticFields[key] = val;
+                    return val;
+                }
             }
+            Debugger::runtimeError("Invalid assignment target.", bin->line);
         }
         
         // Short-circuit logic
@@ -584,6 +802,75 @@ Value Interpreter::evaluate(std::shared_ptr<Expr> expr) {
         
         if (obj.isMap && obj.mapVal) {
             if (obj.mapVal->count(key)) return (*obj.mapVal)[key];
+        }
+        
+        if (obj.isClass && obj.classVal) {
+            if (obj.classVal->staticFields.count(key)) return obj.classVal->staticFields[key];
+            return {"undefined", 0, false};
+        }
+        
+        if (obj.isInstance && obj.instanceVal) {
+             // Check getter first
+             Value getter = obj.instanceVal->klass->findGetter(key);
+             if (getter.isClosure) {
+                 // Bind & Call
+                 // Bind 'this'
+                 auto boundEnv = std::make_shared<Environment>(getter.closureEnv);
+                 boundEnv->define("this", obj);
+                 if (obj.instanceVal->klass->superclass) {
+                     boundEnv->define("super", Value(obj.instanceVal->klass->superclass));
+                 }
+                 // Execute body. Getter has no params.
+                 Value ret = Value("undefined", 0, false);
+                 // We need to executeBlock and capture return value?
+                 // executeBlock returns void.
+                 // Interpreter::executeBlock handles ReturnStmt by throwing/setting flag?
+                 // Interpreter has `lastReturnValue`.
+                 
+                 // callClosure(getter, {})?
+                 // callClosure handles binding env? No.
+                 // callClosure handles return value capture!
+                 // But callClosure creates NEW env from closureEnv.
+                 // I need to create env with THIS bound.
+                 // So I duplicate callClosure logic or modify callClosure.
+                 
+                 // Since I am inside Interpreter, I can use helper.
+                 // Or executeBlock and check interpreter state.
+                 try {
+                     executeBlock(std::dynamic_pointer_cast<BlockStmt>(getter.closureBody), boundEnv);
+                 } catch (Value r) {
+                     // Value thrown as return (if implemented that way).
+                     // But Interpreter seems to set `isReturning` flag.
+                 }
+                 if (isReturning) {
+                     ret = lastReturnValue;
+                     isReturning = false;
+                 }
+                 return ret;
+             }
+             
+             Value val = obj.instanceVal->get(key);
+             // If val is a closure method from the class, we need to bind 'this'? 
+             // Ideally we bind it here using a specialized BoundMethod value or similar?
+             // OR we just rely on CallExpr logic to bind if strict.
+             // But implementing "closure binding" here allows: var m = obj.method; m(); working correctly.
+             if (val.isClosure && !val.isNative) { // Only bind user methods for now?
+                 // Create a bound closure?
+                 // Simple binding: Create a new Closure Value that wraps the original 
+                 // but has an environment where 'this' is defined.
+                 // This is expensive if done on every access.
+                 // Optimization: Only do it? 
+                 // Let's do it.
+                 auto boundEnv = std::make_shared<Environment>(val.closureEnv);
+                 boundEnv->define("this", obj);
+                 if (obj.instanceVal->klass->superclass) {
+                     boundEnv->define("super", Value(obj.instanceVal->klass->superclass));
+                 }
+                 Value boundMethod = val;
+                 boundMethod.closureEnv = boundEnv;
+                 return boundMethod;
+             }
+             return val;
         }
         if (obj.isList && obj.listVal) {
              // Array Properties

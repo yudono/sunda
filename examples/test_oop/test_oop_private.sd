@@ -1,0 +1,26 @@
+println("--- Private Field Test ---");
+
+class BankAccount {
+    #balance = 0;
+
+    constructor(initial) {
+        this.#balance = initial;
+    }
+
+    deposit(amount) {
+        this.#balance = this.#balance + amount;
+    }
+
+    getBalance() {
+        return this.#balance;
+    }
+}
+
+var acc = new BankAccount(100);
+println("Initial: " + acc.getBalance()); // 100
+acc.deposit(50);
+println("After deposit: " + acc.getBalance()); // 150
+
+// Ideally this should fail if stricter lexical scoping was enforced,
+// but for now we test that syntax works and access works via methods.
+// println(acc.#balance); 

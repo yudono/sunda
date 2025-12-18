@@ -1,0 +1,18 @@
+
+// HTTPS Test
+var http = WebServer_create();
+
+http.get("/", (ctx) => {
+    return ctx.text("Secure Hello World!");
+});
+
+http.get("/json", (ctx) => {
+    return ctx.json({ message: "Secure JSON" });
+});
+
+println("Starting Secure Server on 3443...");
+http.listen({
+    port: 3443,
+    cert: "examples/test_webserver/server.crt",
+    key: "examples/test_webserver/server.key"
+});

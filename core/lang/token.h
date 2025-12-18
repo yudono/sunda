@@ -16,7 +16,11 @@ enum TokenType {
     TOK_LT, TOK_GT, TOK_LTE, TOK_GTE,
     TOK_AND, TOK_OR, TOK_DOT_DOT_DOT,
     TOK_ARROW, // =>
-    TOK_BANG   // !
+    TOK_BANG,   // !
+    
+    // OOP Keywords
+    TOK_CLASS, TOK_NEW, TOK_EXTENDS, TOK_SUPER, TOK_STATIC, TOK_GET, TOK_SET, TOK_THIS,
+    TOK_PRIVATE_IDENTIFIER // #field
 };
 
 struct Token {

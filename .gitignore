@@ -1,3 +1,6 @@
-build/
 bin/
+*.o
+*.dSYM
 .DS_Store
+examples/test_webserver/*.crt
+examples/test_webserver/*.key

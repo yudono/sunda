@@ -1,0 +1,36 @@
+println("--- Getter/Setter Test ---");
+
+class Circle {
+    _radius = 0;
+
+    constructor(r) {
+        this._radius = r;
+    }
+
+    get radius() {
+        println("Getting radius");
+        return this._radius;
+    }
+
+    set radius(v) {
+        println("Setting radius to " + v);
+        if (v < 0) {
+            println("Error: Negative radius");
+            return;
+        }
+        this._radius = v;
+    }
+
+    get area() {
+        return 3 * this._radius * this._radius; // approx PI=3
+    }
+}
+
+var c = new Circle(10);
+println("Initial Radius: " + c.radius); // Getting radius, 10
+c.radius = 20; // Setting radius to 20
+println("New Radius: " + c.radius); // Getting radius, 20
+println("Area: " + c.area); // 1200
+
+c.radius = -5; // Error
+println("After Error: " + c.radius); // 20

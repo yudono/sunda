@@ -35,7 +35,7 @@ function App() {
                                 <Row width="30%" justifyContent="end" alignItems="center">
                                     <Text fontSize="16px" color="#2c3e50">Admin User</Text>
                                     <View width="20px" />
-                                    <Image src="../logo.png" width="40" height="40" />
+                                    <Image src="./logo.png" width="40" height="40" />
                                     <View width="20px" />
                                 </Row>
                             </Row>

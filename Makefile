@@ -19,11 +19,12 @@ CXXFLAGS = -std=c++17 -Wall -O2 -Wno-deprecated-declarations -Wno-c++11-narrowin
 # OS-specific settings
 ifeq ($(OS_NAME),macos)
     HOMEBREW_PREFIX = /opt/homebrew
-    INCLUDES = -I$(HOMEBREW_PREFIX)/include -I$(HOMEBREW_PREFIX)/include/freetype2 -I$(HOMEBREW_PREFIX)/include/mysql
-    LDFLAGS = -L$(HOMEBREW_PREFIX)/lib -framework OpenGL -framework Cocoa -framework IOKit -framework CoreVideo -lglfw -lfreetype -lsqlite3 -lmysqlclient -lcurl
+    OPENSSL_PREFIX = /opt/homebrew/opt/openssl@3
+    INCLUDES = -I$(HOMEBREW_PREFIX)/include -I$(HOMEBREW_PREFIX)/include/freetype2 -I$(HOMEBREW_PREFIX)/include/mysql -I$(OPENSSL_PREFIX)/include
+    LDFLAGS = -L$(HOMEBREW_PREFIX)/lib -L$(OPENSSL_PREFIX)/lib -framework OpenGL -framework Cocoa -framework IOKit -framework CoreVideo -lglfw -lfreetype -lsqlite3 -lmysqlclient -lcurl -lssl -lcrypto
 else ifeq ($(OS_NAME),linux)
-    INCLUDES = $(shell pkg-config --cflags glfw3 freetype2 sqlite3 mysqlclient libcurl)
-    LDFLAGS = $(shell pkg-config --libs glfw3 freetype2 sqlite3 mysqlclient libcurl) -lGL -lX11 -lpthread -ldl
+    INCLUDES = $(shell pkg-config --cflags glfw3 freetype2 sqlite3 mysqlclient libcurl openssl)
+    LDFLAGS = $(shell pkg-config --libs glfw3 freetype2 sqlite3 mysqlclient libcurl openssl) -lGL -lX11 -lpthread -ldl
 else ifeq ($(OS_NAME),windows)
     # Assuming MinGW/clang on Windows with libraries in standard paths
     INCLUDES = -I/usr/include/freetype2 -I/usr/include/mysql
@@ -75,7 +76,9 @@ else ifeq ($(OS_NAME),linux)
 	@pkg-config --exists freetype2 || { echo >&2 "Error: freetype2 not found via pkg-config"; exit 1; }
 	@pkg-config --exists sqlite3 || { echo >&2 "Error: sqlite3 not found via pkg-config"; exit 1; }
 	@pkg-config --exists mysqlclient || { echo >&2 "Error: mysqlclient not found via pkg-config"; exit 1; }
+	@pkg-config --exists mysqlclient || { echo >&2 "Error: mysqlclient not found via pkg-config"; exit 1; }
 	@pkg-config --exists libcurl || { echo >&2 "Error: libcurl not found via pkg-config"; exit 1; }
+	@pkg-config --exists openssl || { echo >&2 "Error: openssl not found via pkg-config"; exit 1; }
 endif
 	@echo "Dependencies OK."
 
@@ -115,4 +118,4 @@ copy: $(TARGET)
 sunda: all
 
 clean:
-	rm -rf $(BUILD_ROOT) $(BIN_DIR)
+	rm -rf $(BUILD_DIR) $(BIN_DIR)

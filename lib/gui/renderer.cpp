@@ -1,6 +1,7 @@
 #include "renderer.h"
 #include <iostream>
 #include <map>
+#include <set>
 
 #include <ft2build.h>
 #include FT_FREETYPE_H
@@ -142,9 +143,13 @@ float measure_text_width(const std::string& text, float scale) {
 
 unsigned int load_image(const char* path) {
     int w, h, ch;
+    static std::set<std::string> failures;
     unsigned char* data = stbi_load(path, &w, &h, &ch, 4);
     if (!data) {
-        std::cerr << "Failed to load image: " << path << std::endl;
+        if (failures.find(path) == failures.end()) {
+            std::cerr << "Failed to load image: " << path << std::endl;
+            failures.insert(path);
+        }
         return 0;
     }
 

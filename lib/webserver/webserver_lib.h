@@ -25,19 +25,26 @@ public:
         routes.push_back({method, path, handler});
     }
 
-    void listen(int port, Interpreter& interpreter) {
+    void listen(int port, Interpreter& interpreter, std::string cert = "", std::string key = "") {
+        if (!cert.empty() && !key.empty()) {
+             if (!server.initSSL(cert, key)) {
+                 std::cerr << "Failed to init SSL" << std::endl;
+                 return;
+             }
+        }
+        
         if (!server.start(port)) {
             std::cerr << "Failed to start server on port " << port << std::endl;
             return;
         }
 
         while (true) {
-            int client_fd = server.accept_client();
-            if (client_fd < 0) continue;
+            TCPServer::Client client = server.accept_connection();
+            if (client.fd < 0) continue;
 
-            std::string raw_req = server.read_request(client_fd);
+            std::string raw_req = server.read_request(client);
             if (raw_req.empty()) {
-                server.close_client(client_fd);
+                server.close_client(client);
                 continue;
             }
 
@@ -114,7 +121,7 @@ public:
                         std::vector<Value> args = { Value(ctx_map) };
                         Value result = interpreter.callClosure(route.handler, args);
                         
-                        server.send_response(client_fd, result.strVal);
+                        server.send_response(client, result.strVal);
                         found = true;
                         break;
                     }
@@ -124,10 +131,10 @@ public:
             if (!found) {
                 std::string body = "404 Not Found";
                 std::string res = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: " + std::to_string(body.length()) + "\r\n\r\n" + body;
-                server.send_response(client_fd, res);
+                server.send_response(client, res);
             }
 
-            server.close_client(client_fd);
+            server.close_client(client);
         }
     }
 };
@@ -177,13 +184,16 @@ void register_webserver(Interpreter& interpreter) {
 
         server_obj["listen"] = Value([instance](std::vector<Value> args) -> Value {
             int port = 3000;
+            std::string cert = "";
+            std::string key = "";
+            
             if (!args.empty() && args[0].isMap) {
-                auto it = args[0].mapVal->find("port");
-                if (it != args[0].mapVal->end() && it->second.isInt) {
-                    port = it->second.intVal;
-                }
+                auto m = args[0].mapVal;
+                if (m->count("port") && (*m)["port"].isInt) port = (*m)["port"].intVal;
+                if (m->count("cert") && (*m)["cert"].isInt == false) cert = (*m)["cert"].strVal;
+                if (m->count("key") && (*m)["key"].isInt == false) key = (*m)["key"].strVal;
             }
-            instance->listen(port, *s_interpreter);
+            instance->listen(port, *s_interpreter, cert, key);
             return Value("", 0, false);
         });
 

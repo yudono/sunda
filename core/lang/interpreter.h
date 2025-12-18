@@ -8,6 +8,8 @@
 
 // Forward Decl
 struct Environment;
+struct Class;
+struct Instance;
 
 struct Value {
     std::string strVal;
@@ -30,6 +32,17 @@ struct Value {
     using NativeFunc = std::function<Value(std::vector<Value>)>;
     NativeFunc nativeFunc;
     bool isNative = false;
+    
+    // Getter/Setter tagging
+    bool isGetter = false;
+    bool isSetter = false;
+    
+    // OOP support (Reference Semantics)
+    std::shared_ptr<Class> classVal;
+    bool isClass = false;
+    std::shared_ptr<Instance> instanceVal;
+    bool isInstance = false;
+    
     std::string nativeId; // Stable identification for native closures
     
     Value(std::string s, int i, bool isI);
@@ -37,6 +50,8 @@ struct Value {
     Value(std::vector<Value> list);
     Value(std::map<std::string, Value> map);
     Value(NativeFunc func);
+    Value(std::shared_ptr<Class> c);
+    Value(std::shared_ptr<Instance> i);
     Value();
     
     std::string toString() const;
@@ -70,6 +85,33 @@ struct Environment {
         if (enclosing) return enclosing->get(name);
         return {"undefined", 0, false};
     }
+};
+
+
+struct Class {
+    std::string name;
+    std::shared_ptr<Class> superclass;
+    std::map<std::string, Value> methods;
+    std::map<std::string, Value> getters;
+    std::map<std::string, Value> setters;
+    std::map<std::string, Value> staticFields;
+    std::map<std::string, std::shared_ptr<Expr>> instanceFields;
+    std::vector<std::string> privateFieldNames;
+    
+    Class(std::string n, std::shared_ptr<Class> s = nullptr) : name(n), superclass(s) {}
+    Value findMethod(const std::string& name);
+    Value findGetter(const std::string& name);
+    Value findSetter(const std::string& name);
+};
+
+struct Instance {
+    std::shared_ptr<Class> klass;
+    std::map<std::string, Value> fields;
+    std::map<std::string, Value> privateFields;
+    
+    Instance(std::shared_ptr<Class> k) : klass(k) {}
+    Value get(const std::string& name);
+    void set(const std::string& name, Value value);
 };
 
 class Interpreter {
