@@ -134,6 +134,19 @@ Value string_indexOf(std::vector<Value> args) {
     return Value("", (pos != std::string::npos) ? (int)pos : -1, true);
 }
 
+Value string_find(std::vector<Value> args) {
+    return string_indexOf(args);
+}
+
+// concat(str1, str2, ...) -> string
+Value string_concat(std::vector<Value> args) {
+    std::string result;
+    for (auto& arg : args) {
+        result += arg.toString();
+    }
+    return Value(result, 0, false);
+}
+
 // substring(str, start, end) -> string
 Value string_substring(std::vector<Value> args) {
     if (args.empty()) return Value("", 0, false);
@@ -166,6 +179,8 @@ void register_string_lib(Interpreter& interp) {
     interp.registerNative("startsWith", string_startsWith);
     interp.registerNative("endsWith", string_endsWith);
     interp.registerNative("indexOf", string_indexOf);
+    interp.registerNative("find", string_find);
+    interp.registerNative("concat", string_concat);
     interp.registerNative("substring", string_substring);
     interp.registerNative("str_length", string_length);
 }

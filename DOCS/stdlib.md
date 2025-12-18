@@ -55,6 +55,9 @@ The `webserver` module provides a low-level TCP/IP server with a high-level API.
   - `app.get(path, handler)`: Registers a GET route. Supports `:param` syntax.
   - `app.listen({ port })`: Starts the server.
 - `c.text(body)`: Helper to send a plain text response.
+- `c.html(body)`: Helper to send an HTML response.
+- `c.json(obj)`: Helper to send a JSON response.
+- `c.response(type, body)`: Generic helper for any Content-Type.
 - `c.req.param(name)`: Returns the value of a URL parameter.
 
 Example (Hono-like):
@@ -68,6 +71,46 @@ app.get("/hello/:name", (c) => {
 });
 
 app.listen({ port: 3000 });
+```
+
+### `fs` Module
+File system operations.
+- `fs_readFile(path)`: Returns file content as string.
+- `fs_writeFile(path, content)`: Writes content to file.
+- `fs_exists(path)`: Checks if file exists.
+- `fs_listDir(path)`: Returns array of filenames in directory.
+- `fs_mkdir(path)`: Creates directory recursively.
+- `fs_remove(path)`: Deletes file or directory.
+
+### `os` Module
+Operating system and environment.
+- `os_getenv(name)`: Returns environment variable.
+- `os_platform()`: Returns "macos", "linux", or "windows".
+- `os_cwd()`: Returns current working directory.
+
+### `exec` Module
+Subprocess execution.
+- `exec_run(command)`: Runs command and returns stdout as string.
+
+### `regex` Module
+Regular expression operations.
+- `regex_match(str, pattern)`: Boolean match.
+- `regex_search(str, pattern)`: Boolean search.
+- `regex_replace(str, pattern, replacement)`: Returns replaced string.
+
+## String Module
+```javascript
+import { split, join, replace, concat, find, substring } from "string";
+
+- `concat(a, b, ...)`: Concatenate multiple values into a string.
+- `find(str, search)`: Alias for `indexOf`. Returns the position of the first occurrence.
+- `substring(str, start, end)`: Extracts a part of a string.
+- `str_length(str)`: Returns the length of the string.
+
+```javascript
+import { concat, find, substring } from "string";
+const full = concat("Sunda", " ", "Runtime");
+const pos = find(full, "Runtime"); // 6
 ```
 
 ## Math Module

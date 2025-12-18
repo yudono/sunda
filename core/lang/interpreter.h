@@ -40,6 +40,7 @@ struct Value {
     Value();
     
     std::string toString() const;
+    std::string toJson() const;
     
 
 };

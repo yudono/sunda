@@ -43,3 +43,44 @@ std::string Value::toString() const {
     }
     return isInt ? std::to_string(intVal) : strVal; 
 }
+
+std::string Value::toJson() const {
+    if (isInt) {
+        if (strVal == "true") return "true";
+        if (strVal == "false") return "false";
+        return std::to_string(intVal);
+    }
+    if (isList && listVal) {
+        // ...
+        std::string s = "[";
+        for (size_t i = 0; i < listVal->size(); i++) {
+            s += (*listVal)[i].toJson();
+            if (i < listVal->size() - 1) s += ",";
+        }
+        s += "]";
+        return s;
+    }
+    if (isMap && mapVal) {
+        std::string s = "{";
+        size_t i = 0;
+        for (auto const& pair : *mapVal) {
+            s += "\"" + pair.first + "\":" + pair.second.toJson();
+            if (++i < mapVal->size()) s += ",";
+        }
+        s += "}";
+        return s;
+    }
+    
+    if (strVal == "null" || strVal == "undefined") return "null";
+    if (isClosure || isNative) return "null";
+    
+    // Default: string with quotes
+    // Basic escaping
+    std::string escaped = strVal;
+    size_t pos = 0;
+    while ((pos = escaped.find("\"", pos)) != std::string::npos) {
+        escaped.replace(pos, 1, "\\\"");
+        pos += 2;
+    }
+    return "\"" + escaped + "\"";
+}

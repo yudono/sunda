@@ -21,6 +21,12 @@ Interpreter::Interpreter() {
     };
     globals->define("println", Value(println));
     natives["println"] = println;
+
+    // Default literals
+    globals->define("true", {"true", 1, true});
+    globals->define("false", {"false", 0, true});
+    globals->define("null", {"null", 0, false});
+    globals->define("undefined", {"undefined", 0, false});
 }
 
 void Interpreter::setVar(std::string name, Value v) {
@@ -71,7 +77,8 @@ void Interpreter::execute(std::shared_ptr<Stmt> stmt) {
         
         if (imp->moduleName == "gui" || imp->moduleName == "math" || imp->moduleName == "string" || 
             imp->moduleName == "array" || imp->moduleName == "map" || imp->moduleName == "db" || 
-            imp->moduleName == "webserver") {
+            imp->moduleName == "webserver" || imp->moduleName == "fs" || imp->moduleName == "os" || 
+            imp->moduleName == "exec" || imp->moduleName == "regex") {
             // Built-in module: import requested symbols
             if (!imp->symbols.empty()) {
                 // Import specific symbols: import { render_gui } from "gui"

@@ -18,5 +18,10 @@ app.get("/hello/:name", (c) => {
     return c.text("Hello, " + name + "!");
 });
 
+// json
+app.get("/json", (c) => {
+    return c.json({ message: "Hello World!" });
+});
+
 println("Server running on http://localhost:3000");
 app.listen({ port: 3000 });

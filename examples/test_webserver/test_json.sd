@@ -1,0 +1,16 @@
+// Web Server JSON Verification Script
+import { WebServer_create } from "webserver";
+
+const app = WebServer_create();
+
+app.get("/json", (c) => {
+    return c.json({
+        message: "Hello World!",
+        success: true,
+        data: [1, 2, 3]
+    });
+});
+
+println("Server running on http://localhost:3000");
+println("Test command: curl http://localhost:3000/json");
+app.listen({ port: 3000 });

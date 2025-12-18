@@ -72,6 +72,28 @@ public:
                             return Value(res, 0, false);
                         });
 
+                        // Context.json(obj)
+                        ctx_map["json"] = Value([](std::vector<Value> args) -> Value {
+                            std::string body = args.empty() ? "{}" : args[0].toJson();
+                            std::string res = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: " + std::to_string(body.length()) + "\r\n\r\n" + body;
+                            return Value(res, 0, false);
+                        });
+
+                        // Context.html(str)
+                        ctx_map["html"] = Value([](std::vector<Value> args) -> Value {
+                            std::string body = args.empty() ? "" : args[0].toString();
+                            std::string res = "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: " + std::to_string(body.length()) + "\r\n\r\n" + body;
+                            return Value(res, 0, false);
+                        });
+
+                        // Context.header(contentType, body)
+                        ctx_map["response"] = Value([](std::vector<Value> args) -> Value {
+                            std::string type = args.size() > 0 ? args[0].strVal : "text/plain";
+                            std::string body = args.size() > 1 ? args[1].toString() : "";
+                            std::string res = "HTTP/1.1 200 OK\r\nContent-Type: " + type + "\r\nContent-Length: " + std::to_string(body.length()) + "\r\n\r\n" + body;
+                            return Value(res, 0, false);
+                        });
+
                         // Call handler
                         std::vector<Value> args = { Value(ctx_map) };
                         Value result = interpreter.callClosure(route.handler, args);

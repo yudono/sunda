@@ -15,6 +15,8 @@ Value string_toLowerCase(std::vector<Value> args);
 Value string_startsWith(std::vector<Value> args);
 Value string_endsWith(std::vector<Value> args);
 Value string_indexOf(std::vector<Value> args);
+Value string_find(std::vector<Value> args); // Alias for indexOf
+Value string_concat(std::vector<Value> args);
 Value string_substring(std::vector<Value> args);
 Value string_length(std::vector<Value> args);
 

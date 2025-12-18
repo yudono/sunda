@@ -13,6 +13,10 @@
 #include "map/map.h"
 #include "database/database_lib.h"
 #include "webserver/webserver_lib.h"
+#include "fs/fs_lib.h"
+#include "os/os_lib.h"
+#include "exec/exec_lib.h"
+#include "regex/regex_lib.h"
 #include "register.h"
 
 // Forward declare GUI registration if it's still in sunda.cpp or move it?
@@ -43,4 +47,16 @@ void register_std_libs(Interpreter& interpreter) {
 
     // WebServer
     WebServer::register_webserver(interpreter);
+
+    // File System
+    FSLib::register_fs(interpreter);
+
+    // OS
+    OSLib::register_os(interpreter);
+
+    // Exec
+    ExecLib::register_exec(interpreter);
+
+    // Regex
+    RegexLib::register_regex(interpreter);
 }

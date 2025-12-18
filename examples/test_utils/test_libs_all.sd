@@ -1,0 +1,53 @@
+// Standard Library Expansion Verification
+import { fs_readFile, fs_writeFile, fs_exists, fs_listDir } from "fs";
+import { os_platform, os_cwd, os_getenv } from "os";
+import { exec_run } from "exec";
+import { regex_match, regex_replace } from "regex";
+import { substring, concat, find } from "string";
+
+println("🧪 Verifying Standard Library Expansion...");
+
+// 1. FS Verification
+println("\n[FS] Testing File System...");
+const testFile = "test_fs.txt";
+const testContent = "Hello from Sunda FS!";
+fs_writeFile(testFile, testContent);
+if (fs_exists(testFile)) {
+    const read = fs_readFile(testFile);
+    println("✅ Write/Read/Exists: " + (read == testContent));
+    println("📄 Content: " + read);
+}
+
+const dir = fs_listDir(".");
+println("✅ ListDir (items found): " + dir.length);
+
+// 2. OS Verification
+println("\n[OS] Testing Operating System...");
+println("🍎 Platform: " + os_platform());
+println("📂 CWD: " + os_cwd());
+const path = os_getenv("PATH");
+if (path != "undefined") {
+    println("🔑 PATH (partial): " + substring(path, 0, 50) + "...");
+}
+
+println("\n[STRING] Testing Enhancements...");
+const full = concat("Sunda", " ", "Runtime");
+println("✅ Concat: " + full);
+const pos = find(full, "Runtime");
+println("✅ Find 'Runtime' at: " + pos);
+
+// 3. Exec Verification
+println("\n[EXEC] Testing Command Execution...");
+const uptime = exec_run("uptime");
+println("⏱️  System Uptime: " + uptime);
+
+// 4. Regex Verification
+println("\n[REGEX] Testing Regular Expressions...");
+const email = "user@example.com";
+const isEmail = regex_match(email, "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}");
+println("📧 Email match: " + (isEmail ? "PASS" : "FAIL"));
+
+const replaced = regex_replace("Sunda 2025", "[0-9]+", "YEAR");
+println("🔄 Replace digits: " + replaced);
+
+println("\n🏁 Library Verification Complete.");
