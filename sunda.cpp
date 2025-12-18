@@ -16,11 +16,14 @@
 #include <curl/curl.h>
 #include <csignal>
 #include <atomic>
+#ifdef __linux__
 #include <execinfo.h>
+#endif
 #include <unistd.h>
 
 // crash handler
 void crash_handler(int sig) {
+#ifdef __linux__
   void *array[10];
   size_t size;
 
@@ -31,6 +34,10 @@ void crash_handler(int sig) {
   fprintf(stderr, "Error: signal %d:\n", sig);
   backtrace_symbols_fd(array, size, STDERR_FILENO);
   exit(1);
+#else
+  fprintf(stderr, "Error: signal %d (backtrace not available)\n", sig);
+  exit(1);
+#endif
 }
 #include <atomic>
 

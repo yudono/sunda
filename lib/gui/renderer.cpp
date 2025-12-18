@@ -9,6 +9,13 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #include <cmath>
+#ifdef _WIN32
+#include <GL/gl.h>
+// Define GL_CLAMP_TO_EDGE if not available in MinGW's gl.h
+#ifndef GL_CLAMP_TO_EDGE
+#define GL_CLAMP_TO_EDGE 0x812F
+#endif
+#endif
 
 #ifndef PI
 #define PI 3.14159265359f

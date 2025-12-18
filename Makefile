@@ -26,10 +26,10 @@ else ifeq ($(OS_NAME),linux)
     INCLUDES = $(shell pkg-config --cflags glfw3 freetype2 sqlite3 mysqlclient libcurl openssl)
     LDFLAGS = $(shell pkg-config --libs glfw3 freetype2 sqlite3 mysqlclient libcurl openssl) -lGL -lX11 -lpthread -ldl
 else ifeq ($(OS_NAME),windows)
-    # Windows build using DLLs from win/ directory
-    WIN_LIB_DIR = win
-    INCLUDES = -Iwin/include -Iwin/include/freetype2 -Iwin/include/mysql
-    LDFLAGS = -Lwin -lglfw3 -lfreetype -lsqlite3 -lmysqlcppconn-10-vs14 -lcurl-x64 -lssl -lcrypto -lgdi32 -lopengl32 -lwinmm -lws2_32
+    # Windows build - assumes libraries installed via MSYS2/MinGW
+    # DLL files in win/ are for runtime only
+    INCLUDES = -I/mingw64/include -I/mingw64/include/freetype2 -I/mingw64/include/mysql
+    LDFLAGS = -L/mingw64/lib -lglfw3 -lfreetype -lsqlite3 -lmysqlclient -lcurl -lssl -lcrypto -lgdi32 -lopengl32 -lwinmm -lws2_32
 endif
 
 # Common Includes
@@ -129,3 +129,76 @@ sunda: all
 
 clean:
 	rm -rf $(BUILD_DIR) $(BIN_DIR)
+
+# MinGW Cross-Compilation Target (macOS/Linux -> Windows)
+mingw:
+	@echo "Building for Windows using MinGW cross-compiler..."
+	@mkdir -p build/windows
+	@mkdir -p bin
+	x86_64-w64-mingw32-g++ -std=c++17 -O2 -Wall \
+		-Iwin/include -Ilib/gui -Icore/lang -I. \
+		sunda.cpp \
+		lib/register.cpp \
+		lib/string/string.cpp \
+		lib/array/array.cpp \
+		lib/map/map.cpp \
+		core/lang/lexer.cpp \
+		core/lang/parser.cpp \
+		core/lang/interpreter.cpp \
+		core/lang/value_impl.cpp \
+		lib/gui/renderer.cpp \
+		lib/gui/parser.cpp \
+		lib/gui/widgets.cpp \
+		lib/gui/layout.cpp \
+		lib/gui/minigui.cpp \
+		-Lwin \
+		-lglfw3 -lfreetype -lsqlite3 -lcurl -lmysqlcppconn-10-vs14 \
+		-lssl -lcrypto -lgdi32 -lopengl32 -lwinmm -lws2_32 \
+		-o build/windows/sunda.exe
+	@cp build/windows/sunda.exe bin/sunda.exe
+	@cp win/*.dll bin/
+	@echo "Windows build complete! Binary: bin/sunda.exe"
+	@echo "DLLs copied to bin/"
+
+# MinGW Compile-Only (no linking) - for testing when .lib files are not available
+mingw-compile-only:
+	@echo "Compiling for Windows (compile-only, no linking)..."
+	@mkdir -p build/windows
+	x86_64-w64-mingw32-g++ -std=c++17 -O2 -Wall -c \
+		-Iwin/include -Ilib/gui -Icore/lang -I. \
+		sunda.cpp -o build/windows/sunda.o
+	x86_64-w64-mingw32-g++ -std=c++17 -O2 -Wall -c \
+		-Iwin/include -Ilib/gui -Icore/lang -I. \
+		lib/register.cpp -o build/windows/register.o
+	x86_64-w64-mingw32-g++ -std=c++17 -O2 -Wall -c \
+		-Iwin/include -Ilib/gui -Icore/lang -I. \
+		lib/string/string.cpp -o build/windows/string.o
+	x86_64-w64-mingw32-g++ -std=c++17 -O2 -Wall -c \
+		-Iwin/include -Ilib/gui -Icore/lang -I. \
+		core/lang/interpreter.cpp -o build/windows/interpreter.o
+	@echo "Compilation successful! Object files in build/windows/"
+	@echo "Note: Linking skipped (requires .lib files in win/lib/)"
+
+# MinGW Minimal Build - Links only with Windows system libraries (no external deps)
+# This creates a basic executable but without GLFW/GUI, database, HTTP features
+mingw-minimal:
+	@echo "Building minimal Windows executable (system libs only)..."
+	@mkdir -p build/windows
+	@mkdir -p bin
+	x86_64-w64-mingw32-g++ -std=c++17 -O2 -Wall \
+		-DMINIMAL_BUILD \
+		-Iwin/include -Ilib/gui -Icore/lang -I. \
+		sunda.cpp \
+		lib/register.cpp \
+		lib/string/string.cpp \
+		lib/array/array.cpp \
+		lib/map/map.cpp \
+		core/lang/lexer.cpp \
+		core/lang/parser.cpp \
+		core/lang/interpreter.cpp \
+		core/lang/value_impl.cpp \
+		-lgdi32 -lwinmm -lws2_32 \
+		-o build/windows/sunda.exe
+	@cp build/windows/sunda.exe bin/sunda.exe
+	@echo "✅ Minimal Windows build complete! Binary: bin/sunda.exe"
+	@echo "Note: GUI, Database, HTTP features disabled (no external libs)"

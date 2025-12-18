@@ -18,9 +18,13 @@ public:
     bool connect(const std::string& url) {
         if (url.find("sqlite://") == 0) {
             driver = std::make_unique<Database::SQLiteDriver>();
-        } else if (url.find("mysql://") == 0 || url.find("mariadb://") == 0) {
+        } 
+#ifndef _WIN32
+        else if (url.find("mysql://") == 0 || url.find("mariadb://") == 0) {
             driver = std::make_unique<Database::MySQLDriver>(); 
-        } else if (url.find("postgres://") == 0 || url.find("postgresql://") == 0) {
+        } 
+#endif
+        else if (url.find("postgres://") == 0 || url.find("postgresql://") == 0) {
             // driver = std::make_unique<Database::PostgresDriver>();
             throw std::runtime_error("PostgreSQL driver not yet linked. Please install libpq.");
         } else if (url.find("mongodb://") == 0) {

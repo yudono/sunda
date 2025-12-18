@@ -4,9 +4,14 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
+#endif
 #include <fcntl.h>
 #include <cstring>
 #include <openssl/ssl.h>
@@ -92,7 +97,11 @@ public:
 
         // Allow address reuse
         int opt = 1;
+#ifdef _WIN32
+        setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, (const char*)&opt, sizeof(opt));
+#else
         setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+#endif
 
         struct sockaddr_in address;
         address.sin_family = AF_INET;
@@ -109,8 +118,13 @@ public:
         struct timeval tv;
         tv.tv_sec = 5;
         tv.tv_usec = 0;
+#ifdef _WIN32
         setsockopt(server_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
         setsockopt(server_fd, SOL_SOCKET, SO_SNDTIMEO, (const char*)&tv, sizeof tv);
+#else
+        setsockopt(server_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
+        setsockopt(server_fd, SOL_SOCKET, SO_SNDTIMEO, (const char*)&tv, sizeof tv);
+#endif
 
         if (listen(server_fd, 10) < 0) {
             close(server_fd);
