@@ -8,7 +8,7 @@
 #include "core/lang/lexer.h"
 #include "core/lang/parser.h"
 #include "core/lang/interpreter.h"
-#include "core/debugger.h"
+#include "core/lang/debugger.h"
 #include "lib/gui/minigui.h"
 #include "lib/gui/layout.h"
 #include "lib/register.h"
@@ -53,8 +53,7 @@ void signal_handler(int signum) {
 // Define global appState needed by minigui
 AppState appState;
 
-// Define static member of Debugger
-bool Debugger::isReplMode = false;
+// Static member now defined inline in debugger.h
 
 void printHelp() {
     std::cout << COLOR_CYAN << "Anis Programming Language" << COLOR_RESET << std::endl;

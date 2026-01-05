@@ -57,6 +57,68 @@ struct Value {
     std::string toString() const;
     std::string toJson() const;
     
+    // Type safety helper methods
+    std::string getTypeName() const {
+        if (isInt) return "number";
+        if (isList) return "array";
+        if (isMap) return "object";
+        if (isClosure) return "function";
+        if (isNative) return "native function";
+        if (isClass) return "class";
+        if (isInstance) return "instance";
+        if (isGetter) return "getter";
+        if (isSetter) return "setter";
+        return "string";
+    }
+    
+    bool isCallable() const {
+        return isClosure || isNative;
+    }
+    
+    bool isTruthy() const {
+        if (isInt) return intVal != 0;
+        if (strVal == "false" || strVal == "null" || strVal == "undefined") return false;
+        if (isList && listVal) return !listVal->empty();
+        if (isMap && mapVal) return !mapVal->empty();
+        return !strVal.empty() || isClosure || isNative || isClass || isInstance;
+    }
+    
+    bool isNullOrUndefined() const {
+        return (!isInt && (strVal == "null" || strVal == "undefined"));
+    }
+    
+    // Safe accessors with defaults
+    int safeGetInt(int defaultVal = 0) const {
+        return isInt ? intVal : defaultVal;
+    }
+    
+    std::string safeGetString(const std::string& defaultVal = "") const {
+        return !isInt ? strVal : defaultVal;
+    }
+    
+    // Safe list access
+    Value safeGetListItem(size_t index, const Value& defaultVal = Value("undefined", 0, false)) const {
+        if (isList && listVal && index < listVal->size()) {
+            return (*listVal)[index];
+        }
+        return defaultVal;
+    }
+    
+    // Safe map access
+    Value safeGetMapValue(const std::string& key, const Value& defaultVal = Value("undefined", 0, false)) const {
+        if (isMap && mapVal) {
+            auto it = mapVal->find(key);
+            if (it != mapVal->end()) {
+                return it->second;
+            }
+        }
+        return defaultVal;
+    }
+    
+    // Check if value is a specific type
+    bool checkType(const std::string& expectedType) const {
+        return getTypeName() == expectedType;
+    }
 
 };
 

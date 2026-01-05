@@ -1,5 +1,5 @@
 #include "../core/lang/interpreter.h"
-#include "../core/debugger.h"
+#include "../core/lang/debugger.h"
 #include <thread>
 #include <chrono>
 #include <fstream>

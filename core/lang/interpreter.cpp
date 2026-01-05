@@ -1,6 +1,6 @@
 #include "interpreter.h"
 #include <iostream>
-#include "../debugger.h"
+#include "debugger.h"
 #include "../../lib/http/http_lib.h"
 
 Interpreter::Interpreter() {

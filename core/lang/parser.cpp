@@ -1,6 +1,6 @@
 #include "parser.h"
 #include <iostream>
-#include "../debugger.h"
+#include "debugger.h"
 
 std::vector<std::shared_ptr<Stmt>> Parser::parse() {
     std::vector<std::shared_ptr<Stmt>> statements;
