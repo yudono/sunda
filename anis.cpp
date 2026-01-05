@@ -16,6 +16,8 @@
 #include <curl/curl.h>
 #include <csignal>
 #include <atomic>
+#include <thread>
+#include <chrono>
 #ifdef __linux__
 #include <execinfo.h>
 #endif
@@ -47,6 +49,15 @@ std::atomic<bool> g_interrupt(false);
 void signal_handler(int signum) {
     if (signum == SIGINT) {
         g_interrupt = true;
+        std::cerr << "\n\n" << COLOR_YELLOW << "⚠️  Interrupt signal received (Ctrl+C)" << COLOR_RESET << std::endl;
+        std::cerr << COLOR_CYAN << "   Shutting down..." << COLOR_RESET << std::endl;
+        
+        // Give server a moment to cleanup
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        
+        // Force exit if still running
+        std::cerr << COLOR_GREEN << "✓ Shutdown complete" << COLOR_RESET << std::endl;
+        exit(0);
     }
 }
 
